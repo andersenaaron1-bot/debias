@@ -1,0 +1,22 @@
+# Environments
+.venv/
+env/
+.env
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+# Tooling / cache
+.DS_Store
+.cache/
+logs/
+artifacts/
+data/
+
+# IDE
+.idea/
+/AGENTS.md
