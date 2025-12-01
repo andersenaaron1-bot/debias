@@ -15,7 +15,7 @@ __pycache__/
 .cache/
 logs/
 artifacts/
-data/
+src/data
 
 # IDE
 .idea/
