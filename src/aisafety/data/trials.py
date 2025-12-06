@@ -61,6 +61,7 @@ def build_hc3_trials(df_desc: pd.DataFrame, seed: int = 1234) -> pd.DataFrame:
         h_text = hum.iloc[0]["text"]
         l_text = llm.iloc[0]["text"]
         hc3_src = hum.iloc[0].get("hc3_source")
+        question = hum.iloc[0].get("question", title)
 
         if rng.random() < 0.5:
             A_text, A_source = h_text, "human"
@@ -73,6 +74,7 @@ def build_hc3_trials(df_desc: pd.DataFrame, seed: int = 1234) -> pd.DataFrame:
             {
                 "item_type": "hc3",
                 "title": title,
+                "question": question,
                 "hc3_source": hc3_src,
                 "A_text": A_text,
                 "B_text": B_text,
@@ -88,10 +90,12 @@ def build_desc_df_from_trials(df_trials: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for r in df_trials.itertuples(index=False):
         hc3_src = getattr(r, "hc3_source", None)
+        question = getattr(r, "question", None)
         rows += [
             {
                 "item_type": r.item_type,
                 "title": r.title,
+                "question": question,
                 "text": r.A_text,
                 "source": r.A_source,
                 "hc3_source": hc3_src,
@@ -99,6 +103,7 @@ def build_desc_df_from_trials(df_trials: pd.DataFrame) -> pd.DataFrame:
             {
                 "item_type": r.item_type,
                 "title": r.title,
+                "question": question,
                 "text": r.B_text,
                 "source": r.B_source,
                 "hc3_source": hc3_src,

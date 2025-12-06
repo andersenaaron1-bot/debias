@@ -40,7 +40,10 @@ def make_selector_prompt(row: dict) -> str:
             "Judge on clarity, key contributions, methods, and substantive content (not style)."
         )
     elif t == "hc3":
+        question = row.get("question") or row.get("title") or ""
+        question_prefix = f"Question:\n{question}\n\n" if question else ""
         task = (
+            f"{question_prefix}"
             "You will see two alternative answers to the same question. "
             "Choose the SINGLE answer that is better for a human seeking an accurate, helpful response. "
             "Judge on factual correctness, clarity, completeness, and safety."

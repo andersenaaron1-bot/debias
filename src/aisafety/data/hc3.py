@@ -32,6 +32,7 @@ def load_hc3_descriptions(ds_split) -> pd.DataFrame:
             {
                 "item_type": "hc3",
                 "title": q,
+                "question": q,
                 "text": h,
                 "source": "human",
                 "hc3_source": hc3_src,
@@ -42,6 +43,7 @@ def load_hc3_descriptions(ds_split) -> pd.DataFrame:
             {
                 "item_type": "hc3",
                 "title": q,
+                "question": q,
                 "text": a,
                 "source": "llm",
                 "hc3_source": hc3_src,
