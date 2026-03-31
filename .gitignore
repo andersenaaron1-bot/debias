@@ -15,6 +15,10 @@ __pycache__/
 .cache/
 logs/
 artifacts/
+results/
+src/aisafety.egg-info/
+.tmp_*.pdf
+.tmp_*.txt
 
 
 # IDE

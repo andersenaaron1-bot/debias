@@ -18,6 +18,25 @@ def parse_args():
         help="Random seed for shuffling pairs.",
     )
     p.add_argument(
+        "--include-item-types",
+        type=str,
+        default="movie,paper,product",
+        help="Comma-separated item types to include from the Laurito datasets.",
+    )
+    p.add_argument(
+        "--balance-order",
+        dest="balance_order",
+        action="store_true",
+        help="Emit paired trials with human first and second to control position bias.",
+    )
+    p.add_argument(
+        "--no-balance-order",
+        dest="balance_order",
+        action="store_false",
+        help="Disable paired ordering.",
+    )
+    p.set_defaults(balance_order=True)
+    p.add_argument(
         "--out",
         type=Path,
         default=Path("artifacts/trials.csv"),
@@ -28,7 +47,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    df = build_all_trials(DOMAINS, seed=args.seed)
+    include_types = [t.strip() for t in args.include_item_types.split(",") if t.strip()]
+    df = build_all_trials(DOMAINS, seed=args.seed, balance_order=args.balance_order)
+    if include_types:
+        df = df[df["item_type"].isin(include_types)].reset_index(drop=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(args.out, index=False)
     print(f"Wrote {len(df)} trials to {args.out}")

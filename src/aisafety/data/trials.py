@@ -13,30 +13,51 @@ from aisafety.data.loaders import load_human_map, load_llm_all_by_title
 
 
 def build_trials(
-    item_type: str, human_map: dict[str, str], llm_by_title: dict[str, list[str]], rng: random.Random
+    item_type: str,
+    human_map: dict[str, str],
+    llm_by_title: dict[str, list[str]],
+    rng: random.Random,
+    balance_order: bool = False,
 ) -> pd.DataFrame:
+    """
+    Construct A/B rows for a single domain.
+
+    When balance_order=True, each title is emitted twice so human appears
+    once as option A and once as option B to control for position bias.
+    """
     shared = sorted(set(human_map) & set(llm_by_title))
     rows = []
     for t in shared:
-        pair = [
-            {"source": "human", "text": human_map[t]},
-            {"source": "llm", "text": rng.choice(llm_by_title[t])},
-        ]
-        rng.shuffle(pair)
-        rows.append(
-            {
-                "item_type": item_type,
-                "title": t,
-                "A_text": pair[0]["text"],
-                "B_text": pair[1]["text"],
-                "A_source": pair[0]["source"],
-                "B_source": pair[1]["source"],
-            }
-        )
+        human_text = human_map[t]
+        llm_text = rng.choice(llm_by_title[t])
+        if balance_order:
+            pairings = [
+                (human_text, "human", llm_text, "llm"),
+                (llm_text, "llm", human_text, "human"),
+            ]
+        else:
+            pair = [
+                {"source": "human", "text": human_text},
+                {"source": "llm", "text": llm_text},
+            ]
+            rng.shuffle(pair)
+            pairings = [(pair[0]["text"], pair[0]["source"], pair[1]["text"], pair[1]["source"])]
+
+        for A_text, A_source, B_text, B_source in pairings:
+            rows.append(
+                {
+                    "item_type": item_type,
+                    "title": t,
+                    "A_text": A_text,
+                    "B_text": B_text,
+                    "A_source": A_source,
+                    "B_source": B_source,
+                }
+            )
     return pd.DataFrame(rows)
 
 
-def build_all_trials(domains_cfg: dict[str, DomainConfig], seed: int = 0) -> pd.DataFrame:
+def build_all_trials(domains_cfg: dict[str, DomainConfig], seed: int = 0, balance_order: bool = False) -> pd.DataFrame:
     rng = random.Random(seed)
     all_trials: list[pd.DataFrame] = []
     for item_type, cfg in domains_cfg.items():
@@ -44,7 +65,7 @@ def build_all_trials(domains_cfg: dict[str, DomainConfig], seed: int = 0) -> pd.
             continue
         human_map = load_human_map(cfg.human_dir)
         llm_by_title = load_llm_all_by_title(cfg.llm_dir, prompt_key=cfg.prompt_key)
-        df_t = build_trials(item_type, human_map, llm_by_title, rng)
+        df_t = build_trials(item_type, human_map, llm_by_title, rng, balance_order=balance_order)
         if len(df_t):
             all_trials.append(df_t)
     return pd.concat(all_trials, ignore_index=True) if all_trials else pd.DataFrame()

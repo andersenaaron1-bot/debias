@@ -83,7 +83,8 @@ def _extract_all_texts(d: dict) -> list[str]:
 
 
 def _iter_json_files(root: Path) -> Iterable[Path]:
-    for path in root.rglob("*.json"):
+    # Sort for reproducibility across filesystems / OS directory iteration order.
+    for path in sorted(root.rglob("*.json")):
         if path.is_file():
             yield path
 
@@ -109,7 +110,8 @@ def load_llm_all_by_title(llm_dir: str | Path, prompt_key: str | None = None) ->
     """Return mapping: title -> list of all LLM texts available."""
     root = Path(llm_dir)
     pattern = f"*{prompt_key}*.json" if prompt_key else "*.json"
-    paths = root.rglob(pattern)
+    # Sort for reproducibility across filesystems / OS directory iteration order.
+    paths = sorted(root.rglob(pattern))
     by_title: dict[str, list[str]] = defaultdict(list)
 
     for p in paths:

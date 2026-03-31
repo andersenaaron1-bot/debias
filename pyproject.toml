@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aisafety"
 version = "0.1.0"
-description = "Modular bias detection, stylometry, and activation steering workflows for the AI-AI bias seminar."
+description = "Reward-model content-invariance workflows for human-vs-LLM preference evaluation."
 readme = "README.md"
 requires-python = ">=3.10"
 
@@ -13,6 +13,7 @@ dependencies = [
     "torch>=2.2",
     "transformers>=4.44.0",
     "accelerate>=0.33.0",
+    "peft>=0.12.0",
     "datasets>=2.19.0",
     "huggingface_hub>=0.23.0",
     "pandas>=2.1",

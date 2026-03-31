@@ -1,0 +1,55 @@
+{
+  "name": "final_reward_alignment_v1",
+  "training": {
+    "pairwise_anchor": {
+      "dataset": "SHP-2",
+      "train_jsonl": "data/derived/pref_pairs_shp2/pref_pairs_train.jsonl",
+      "val_jsonl": "data/derived/pref_pairs_shp2/pref_pairs_val.jsonl"
+    },
+    "pointwise_anchor": {
+      "dataset": "HelpSteer2",
+      "train_jsonl": "data/derived/helpsteer2_anchor/anchor_train.jsonl",
+      "val_jsonl": "data/derived/helpsteer2_anchor/anchor_val.jsonl"
+    },
+    "paired_invariance_m2": {
+      "dataset": "public rewrite mixture",
+      "train_jsonl": "data/derived/style_groups/m2_publishable_v1/style_groups_train.jsonl",
+      "val_jsonl": "data/derived/style_groups/m2_publishable_v1/style_groups_val.jsonl",
+      "axes": ["formality", "fluency", "detox_tone", "paraphrase_surface"]
+    },
+    "paired_invariance_m3": {
+      "dataset": "public rewrite mixture",
+      "train_jsonl": "data/derived/style_groups/m3_publishable_v1/style_groups_train.jsonl",
+      "val_jsonl": "data/derived/style_groups/m3_publishable_v1/style_groups_val.jsonl",
+      "axes": ["fluency", "detox_tone", "paraphrase_surface"]
+    },
+    "cue_discovery": {
+      "dataset": "local Laurito domains + HC3 + H-LLMC2",
+      "train_jsonl": "data/derived/cue_discovery_v2/balanced_splits/corpus_scored_balanced_train.jsonl",
+      "val_jsonl": "data/derived/cue_discovery_v2/balanced_splits/corpus_scored_balanced_val.jsonl",
+      "cue_families_m2": [
+        "academic_formality",
+        "safety_corporate_tone",
+        "promotional_sales_tone",
+        "narrative_packaging",
+        "template_boilerplate",
+        "verbosity_compression",
+        "hedging_certainty"
+      ],
+      "cue_families_m3": [
+        "safety_corporate_tone",
+        "promotional_sales_tone",
+        "narrative_packaging",
+        "template_boilerplate",
+        "verbosity_compression",
+        "hedging_certainty"
+      ]
+    }
+  },
+  "evaluation": {
+    "laurito_domains": ["paper", "product", "movie"],
+    "preference_retention": "SHP",
+    "style_sensitivity": ["formality", "fluency", "detox_tone", "paraphrase_surface"],
+    "reward_benchmarks_script": "src/aisafety/scripts/eval_reward_benchmarks.py"
+  }
+}

@@ -1,10 +1,30 @@
-"""Data loading utilities for local corpora and Hc3/other hf later."""
+"""Data loading utilities for the reward-invariance workflow."""
 
+from .cue_corpus import (
+    CueCorpusRecord,
+    assign_group_split,
+    collect_cue_corpus_records,
+    iter_hc3_records,
+    iter_remote_hllmc2_records,
+    iter_local_domain_records,
+    iter_remote_hc3_records,
+    limit_records_by_item_type,
+    summarize_cue_corpus,
+)
 from .domains import DOMAINS, DomainConfig, list_available_domains
 from .loaders import load_human_map, load_llm_all_by_title
 from .trials import build_all_trials, build_trials, build_hc3_trials, build_desc_df_from_trials
 
 __all__ = [
+    "CueCorpusRecord",
+    "assign_group_split",
+    "collect_cue_corpus_records",
+    "iter_hc3_records",
+    "iter_remote_hllmc2_records",
+    "iter_local_domain_records",
+    "iter_remote_hc3_records",
+    "limit_records_by_item_type",
+    "summarize_cue_corpus",
     "DOMAINS",
     "DomainConfig",
     "list_available_domains",
