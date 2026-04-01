@@ -27,6 +27,7 @@ import argparse
 import csv
 from contextlib import ExitStack
 import json
+import os
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -616,6 +617,16 @@ def _eval_cue(
 def main() -> None:
     args = parse_args()
     set_seed(int(args.seed))
+
+    # Some Slurm/Pyxis environments expose partial distributed variables that
+    # make Accelerate attempt env:// rendezvous without WORLD_SIZE being set.
+    # The current training path is single-process/single-GPU, so default to a
+    # clean rank-0 world when the required env vars are absent.
+    os.environ.setdefault("WORLD_SIZE", "1")
+    os.environ.setdefault("RANK", "0")
+    os.environ.setdefault("LOCAL_RANK", "0")
+    os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
+    os.environ.setdefault("MASTER_PORT", "29500")
 
     if bool(args.bf16) and bool(args.fp16):
         raise ValueError("Set at most one of --bf16/--fp16.")
