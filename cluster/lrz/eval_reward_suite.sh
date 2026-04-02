@@ -1,28 +1,39 @@
 #!/bin/bash
 set -euo pipefail
 
-MODEL_ID="${MODEL_ID:-google/gemma-2-9b-it}"
+MODEL_ID="${MODEL_ID:-}"
 WORKDIR="${WORKDIR:-/workspace}"
 RUN_DIR="${1:?usage: eval_reward_suite.sh /workspace/outputs/m2_full_v1}"
 OUTPUT_DIR="${2:-$RUN_DIR/eval}"
-
-ADAPTER_DIR="$RUN_DIR/lora_adapter"
-VALUE_HEAD="$RUN_DIR/value_head.pt"
+BENCHMARKS="${BENCHMARKS:-arc_challenge,hellaswag,winogrande,piqa,social_iqa,boolq,mmlu}"
+BENCHMARK_MAX_EXAMPLES="${BENCHMARK_MAX_EXAMPLES:-250}"
+TRIAD_REWRITE_JSONL="${TRIAD_REWRITE_JSONL:-}"
+LAURITO_TRIALS_CSV="${LAURITO_TRIALS_CSV:-}"
+CACHE_DIR="${CACHE_DIR:-${HF_HOME:-}}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$WORKDIR"
 
-python -m aisafety.scripts.eval_pref_retention \
-  --pref-jsonl "$WORKDIR/data/derived/pref_pairs_shp2/pref_pairs_val.jsonl" \
-  --model-id "$MODEL_ID" \
-  --lora-adapter-dir "$ADAPTER_DIR" \
-  --value-head "$VALUE_HEAD" \
-  --out-json "$OUTPUT_DIR/pref_retention.json"
+CMD=(
+  python -m aisafety.scripts.run_full_reward_eval
+  --run-dir "$RUN_DIR"
+  --out-dir "$OUTPUT_DIR"
+  --workspace-root "$WORKDIR"
+  --benchmark "$BENCHMARKS"
+  --benchmark-max-examples "$BENCHMARK_MAX_EXAMPLES"
+)
 
-python -m aisafety.scripts.eval_style_sensitivity \
-  --style-jsonl "$WORKDIR/data/derived/style_groups/m2_publishable_v1/style_groups_val.jsonl" \
-  --model-id "$MODEL_ID" \
-  --lora-adapter-dir "$ADAPTER_DIR" \
-  --value-head "$VALUE_HEAD" \
-  --out-json "$OUTPUT_DIR/style_sensitivity.json" \
-  --out-csv "$OUTPUT_DIR/style_sensitivity.csv"
+if [[ -n "$MODEL_ID" ]]; then
+  CMD+=(--model-id "$MODEL_ID")
+fi
+if [[ -n "$CACHE_DIR" ]]; then
+  CMD+=(--cache-dir "$CACHE_DIR")
+fi
+if [[ -n "$TRIAD_REWRITE_JSONL" ]]; then
+  CMD+=(--triad-rewrite-jsonl "$TRIAD_REWRITE_JSONL")
+fi
+if [[ -n "$LAURITO_TRIALS_CSV" ]]; then
+  CMD+=(--laurito-trials-csv "$LAURITO_TRIALS_CSV")
+fi
+
+"${CMD[@]}"

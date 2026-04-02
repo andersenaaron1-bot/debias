@@ -4,6 +4,13 @@ This repo is focused on one project:
 
 - Train and evaluate LoRA reward adapters that are as invariant as possible to stylistic or surface-form variation, so preference judgments depend on content rather than expression.
 
+Active planning docs:
+
+- [docs/final_training_recipe_v1.md](docs/final_training_recipe_v1.md)
+- [docs/research_backbone_icml2026.md](docs/research_backbone_icml2026.md)
+- [docs/mech_interp_judge_research_plan.md](docs/mech_interp_judge_research_plan.md)
+- [docs/step_by_step_experiment_plan.md](docs/step_by_step_experiment_plan.md)
+
 The active workflow is:
 
 1. Build Laurito and HC3 human-vs-LLM evaluation trials.
