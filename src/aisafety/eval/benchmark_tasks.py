@@ -96,6 +96,10 @@ def load_benchmark_examples(
         spec.config_name,
         split=str(split or spec.default_split),
         cache_dir=None if cache_dir is None else str(cache_dir),
+        # PIQA and some older benchmark loaders ship small dataset scripts on HF.
+        # The eval job is non-interactive, so opt in explicitly for this fixed,
+        # known benchmark suite rather than blocking on a trust prompt.
+        trust_remote_code=True,
     )
 
     if max_examples is not None and int(max_examples) > 0:
