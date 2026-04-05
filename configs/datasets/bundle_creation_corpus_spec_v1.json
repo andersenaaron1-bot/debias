@@ -1,0 +1,239 @@
+{
+  "version": "bundle_creation_corpus_spec_v1",
+  "purpose": "Defensible atom-to-bundle discovery for mechanistic judge analysis.",
+  "design_rule": {
+    "discovery": "broad domain-based source-labeled text",
+    "confirmation": "paired or semantic-control corpora",
+    "ecology": "Laurito only"
+  },
+  "global_constraints": {
+    "sample_unit": "single text excerpt",
+    "preferred_token_range": {
+      "min": 120,
+      "max": 800
+    },
+    "minimum_short_answer_tokens": 80,
+    "max_outputs_per_prompt_group_discovery": 3,
+    "max_continuations_per_seed_chunk_discovery": 1,
+    "max_corpus_share_main_pool": 0.4,
+    "max_item_type_share_discovery_core": 0.25,
+    "keep_laurito_out_of_primary_discovery": true,
+    "keep_domain_llm_supplements_flagged_separately": true
+  },
+  "strata": [
+    {
+      "stratum_id": "A1",
+      "role": "discovery_core",
+      "required": true,
+      "datasets": [
+        {
+          "dataset_id": "hc3",
+          "status": "required",
+          "label_mode": "human_vs_chatgpt",
+          "target_texts_min": 10000,
+          "target_texts_preferred": 16000,
+          "domains": [
+            "qa",
+            "medicine",
+            "finance",
+            "open_qa",
+            "reddit",
+            "wiki"
+          ],
+          "primary_uses": [
+            "atom_prevalence",
+            "cooccurrence",
+            "source_association"
+          ],
+          "source_url": "https://huggingface.co/datasets/Hello-SimpleAI/HC3"
+        },
+        {
+          "dataset_id": "h_llmc2",
+          "status": "required",
+          "label_mode": "human_vs_multi_llm",
+          "target_texts_min": 8000,
+          "target_texts_preferred": 15000,
+          "domains": [
+            "qa",
+            "medicine",
+            "finance",
+            "open_qa",
+            "reddit"
+          ],
+          "primary_uses": [
+            "generator_diversity",
+            "cooccurrence",
+            "source_association"
+          ],
+          "sampling_notes": [
+            "exclude thought traces",
+            "cap outputs per prompt group",
+            "retain at least five non-ChatGPT model families"
+          ],
+          "source_url": "https://huggingface.co/datasets/noepsl/H-LLMC2"
+        },
+        {
+          "dataset_id": "hape",
+          "status": "preferred",
+          "label_mode": "human_vs_multi_llm_continuation",
+          "target_texts_min": 6000,
+          "target_texts_preferred": 12000,
+          "domains": [
+            "academic",
+            "news",
+            "fiction",
+            "spoken",
+            "blogs",
+            "tv_movie_scripts"
+          ],
+          "primary_uses": [
+            "bundle_discovery",
+            "genre_coverage"
+          ],
+          "sampling_notes": [
+            "stratify by text type",
+            "cap per seed chunk"
+          ],
+          "source_url": "https://huggingface.co/datasets/browndw/human-ai-parallel-corpus"
+        }
+      ]
+    },
+    {
+      "stratum_id": "B1",
+      "role": "domain_bolster",
+      "required": true,
+      "datasets": [
+        {
+          "dataset_id": "pubmed_abstracts",
+          "status": "required",
+          "label_mode": "human_only",
+          "target_texts_min": 2000,
+          "target_texts_preferred": 5000,
+          "domains": [
+            "paper"
+          ],
+          "primary_uses": [
+            "academic_register_baseline",
+            "atom_prevalence"
+          ],
+          "source_url": "https://huggingface.co/datasets/ncbi/pubmed"
+        },
+        {
+          "dataset_id": "cmu_movie_summary",
+          "status": "required",
+          "label_mode": "human_only",
+          "target_texts_min": 2000,
+          "target_texts_preferred": 5000,
+          "domains": [
+            "movie"
+          ],
+          "primary_uses": [
+            "narrative_register_baseline",
+            "atom_prevalence"
+          ],
+          "source_url": "https://www.cs.cmu.edu/~ark/personas/"
+        },
+        {
+          "dataset_id": "amazon_product_descriptions",
+          "status": "required",
+          "label_mode": "human_only",
+          "target_texts_min": 2000,
+          "target_texts_preferred": 5000,
+          "domains": [
+            "product"
+          ],
+          "primary_uses": [
+            "promotional_register_baseline",
+            "atom_prevalence"
+          ],
+          "source_url": "https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023"
+        },
+        {
+          "dataset_id": "target_domain_llm_supplements",
+          "status": "conditional_required",
+          "label_mode": "llm_only_generated_supplement",
+          "target_texts_min": 1000,
+          "target_texts_preferred": 1500,
+          "domains": [
+            "paper",
+            "movie",
+            "product"
+          ],
+          "primary_uses": [
+            "domain_llm_coverage"
+          ],
+          "sampling_notes": [
+            "templated prompts only",
+            "two open-weight instruct models",
+            "one generation per prompt",
+            "keep as separate stratum"
+          ]
+        }
+      ]
+    },
+    {
+      "stratum_id": "C1",
+      "role": "controlled_confirmation",
+      "required": true,
+      "datasets": [
+        {
+          "dataset_id": "hc3_plus",
+          "status": "required",
+          "label_mode": "human_vs_chatgpt_semantic_invariant",
+          "target_texts_min": 4000,
+          "target_texts_preferred": 8000,
+          "domains": [
+            "summarization",
+            "translation",
+            "paraphrasing"
+          ],
+          "primary_uses": [
+            "semantic_control_confirmation"
+          ],
+          "source_url": "https://huggingface.co/papers/2309.02731"
+        },
+        {
+          "dataset_id": "local_rewrite_control",
+          "status": "required",
+          "label_mode": "content_preserving_rewrites",
+          "primary_uses": [
+            "bundle_robustness_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "stratum_id": "D1",
+      "role": "ecological_validation",
+      "required": true,
+      "datasets": [
+        {
+          "dataset_id": "laurito_paper_product_movie",
+          "status": "required",
+          "label_mode": "judge_choice",
+          "primary_uses": [
+            "ecological_validation"
+          ],
+          "holdout_from_discovery": true
+        }
+      ]
+    },
+    {
+      "stratum_id": "E1",
+      "role": "heldout_transfer",
+      "required": false,
+      "datasets": [
+        {
+          "dataset_id": "m4",
+          "status": "preferred",
+          "label_mode": "human_vs_multi_llm",
+          "primary_uses": [
+            "unseen_domain_transfer",
+            "unseen_generator_transfer"
+          ],
+          "source_url": "https://aclanthology.org/2024.eacl-long.83/"
+        }
+      ]
+    }
+  ]
+}

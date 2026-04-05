@@ -10,6 +10,18 @@ Active planning docs:
 - [docs/research_backbone_icml2026.md](docs/research_backbone_icml2026.md)
 - [docs/mech_interp_judge_research_plan.md](docs/mech_interp_judge_research_plan.md)
 - [docs/step_by_step_experiment_plan.md](docs/step_by_step_experiment_plan.md)
+- [docs/linguistic_ontology_and_project_charter.md](docs/linguistic_ontology_and_project_charter.md)
+- [docs/ontology_definition_and_validation_plan.md](docs/ontology_definition_and_validation_plan.md)
+- [docs/d1_candidate_atom_inventory.md](docs/d1_candidate_atom_inventory.md)
+- [docs/d2_bundle_validation.md](docs/d2_bundle_validation.md)
+- [docs/d3_ecological_validation.md](docs/d3_ecological_validation.md)
+- [docs/corpus_specification_bundle_creation_v1.md](docs/corpus_specification_bundle_creation_v1.md)
+- [docs/external_excerpt_staging_v1.md](docs/external_excerpt_staging_v1.md)
+
+Bundle-creation corpus helpers:
+
+- `python -m aisafety.scripts.fetch_bundle_creation_external_inputs --help`
+- `python -m aisafety.scripts.build_bundle_creation_corpus --help`
 
 The active workflow is:
 
