@@ -626,7 +626,12 @@ def main() -> None:
     os.environ.setdefault("RANK", "0")
     os.environ.setdefault("LOCAL_RANK", "0")
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
-    os.environ.setdefault("MASTER_PORT", "29500")
+    slurm_job_id = os.environ.get("SLURM_JOB_ID", "").strip()
+    if slurm_job_id.isdigit():
+        default_master_port = str(20000 + (int(slurm_job_id) % 20000))
+    else:
+        default_master_port = "29500"
+    os.environ.setdefault("MASTER_PORT", default_master_port)
 
     if bool(args.bf16) and bool(args.fp16):
         raise ValueError("Set at most one of --bf16/--fp16.")

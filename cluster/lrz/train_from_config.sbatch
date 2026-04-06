@@ -28,7 +28,11 @@ export WORLD_SIZE="${WORLD_SIZE:-1}"
 export RANK="${RANK:-0}"
 export LOCAL_RANK="${LOCAL_RANK:-0}"
 export MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
-export MASTER_PORT="${MASTER_PORT:-29500}"
+MASTER_PORT_DEFAULT=29500
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+  MASTER_PORT_DEFAULT=$((20000 + (SLURM_JOB_ID % 20000)))
+fi
+export MASTER_PORT="${MASTER_PORT:-$MASTER_PORT_DEFAULT}"
 
 python -m aisafety.scripts.run_experiment_config \
   --config "$CONFIG_PATH" \
