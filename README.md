@@ -15,6 +15,8 @@ Active planning docs:
 - [docs/d1_candidate_atom_inventory.md](docs/d1_candidate_atom_inventory.md)
 - [docs/d2_bundle_validation.md](docs/d2_bundle_validation.md)
 - [docs/d3_ecological_validation.md](docs/d3_ecological_validation.md)
+- [docs/d4_reduced_ontology.md](docs/d4_reduced_ontology.md)
+- [docs/judge_experiment_matrix_v1.md](docs/judge_experiment_matrix_v1.md)
 - [docs/corpus_specification_bundle_creation_v1.md](docs/corpus_specification_bundle_creation_v1.md)
 - [docs/external_excerpt_staging_v1.md](docs/external_excerpt_staging_v1.md)
 

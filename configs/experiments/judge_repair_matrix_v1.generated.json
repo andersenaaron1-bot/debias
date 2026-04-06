@@ -1,0 +1,20 @@
+{
+  "spec_json": "configs\\experiments\\judge_repair_matrix_v1.json",
+  "out_dir": "configs\\experiments",
+  "generated": [
+    "j0_anchor_v1.json",
+    "jrepair_all_v1.json",
+    "jrepair_loo_cue_academic_formality_v1.json",
+    "jrepair_loo_cue_safety_corporate_tone_v1.json",
+    "jrepair_loo_cue_promotional_sales_tone_v1.json",
+    "jrepair_loo_cue_narrative_packaging_v1.json",
+    "jrepair_loo_cue_template_boilerplate_v1.json",
+    "jrepair_loo_cue_verbosity_compression_v1.json",
+    "jrepair_loo_cue_hedging_certainty_v1.json",
+    "jrepair_loo_axis_formality_v1.json",
+    "jrepair_loo_axis_detox_tone_v1.json",
+    "jrepair_loo_axis_fluency_v1.json",
+    "jrepair_loo_axis_paraphrase_surface_v1.json",
+    "jrepair_loo_joint_academic_formality_v1.json"
+  ]
+}

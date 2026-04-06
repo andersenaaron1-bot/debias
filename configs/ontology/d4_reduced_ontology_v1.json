@@ -1,0 +1,139 @@
+{
+  "name": "d4_reduced_ontology_v1",
+  "description": "Reduced tracing ontology selected from D1 operational atoms, D2 bundle structure, D3 ecological relevance on Laurito, and M2-vs-M3 contrast.",
+  "selection_rule": {
+    "purpose": "Keep low-level, mechanistically plausible cue atoms that either show ecological relevance in D3 or move materially between M2 and M3.",
+    "criteria": [
+      "Atom is operationalized in D1/D2.",
+      "Atom is plausibly content-light and local enough to be traced in SAE feature space.",
+      "Atom or enclosing bundle shows non-null D3 evidence on M2 or M3, or atom shows meaningful M2-vs-M3 contrast.",
+      "Prefer atom-level targets over bridge/register variables for first-pass tracing."
+    ],
+    "contrast_threshold_guideline": {
+      "bundle_abs_delta_z": 0.04,
+      "atom_abs_delta_z": 0.06
+    }
+  },
+  "trace_bundles": [
+    {
+      "bundle_id": "formal_information_packaging",
+      "status": "primary",
+      "motivation": "Captures the academic-formality signal in lower-level lexical and constructional atoms instead of a single coarse register label.",
+      "member_atoms": [
+        "nominalization_patterns",
+        "formal_connectives",
+        "complex_noun_phrase_chains",
+        "passive_or_agentless_constructions",
+        "institutional_impersonality",
+        "subordination_density",
+        "participial_modifier_usage"
+      ],
+      "readout_bundles": [
+        "academic_formality"
+      ]
+    },
+    {
+      "bundle_id": "certainty_and_stance_calibration",
+      "status": "primary",
+      "motivation": "Separates certainty/hedging behavior from broader formality, with strong M2-vs-M3 movement in paper-facing atoms.",
+      "member_atoms": [
+        "authoritative_certainty",
+        "booster_certainty_markers",
+        "hedge_markers",
+        "epistemic_hedging",
+        "evidential_markers"
+      ],
+      "readout_bundles": [
+        "stance_calibration"
+      ]
+    },
+    {
+      "bundle_id": "professional_self_presentation",
+      "status": "primary",
+      "motivation": "Compact, frequent, and easy to localize. Likely important for self-presentational or evaluative judge settings.",
+      "member_atoms": [
+        "self_mention_markers",
+        "professional_self_presentation"
+      ],
+      "readout_bundles": [
+        "job_application_professional_register"
+      ]
+    },
+    {
+      "bundle_id": "enumerative_assistant_packaging",
+      "status": "primary",
+      "motivation": "Captures listiness and assistant-style answer framing, including the strongest positive D3 signal on bullet structure.",
+      "member_atoms": [
+        "bullet_or_list_structure",
+        "enumeration_markers",
+        "balanced_multi_part_completion",
+        "helpful_assistant_wrapper"
+      ],
+      "readout_bundles": [
+        "template_packaging",
+        "helpdesk_assistant_register"
+      ]
+    },
+    {
+      "bundle_id": "narrative_and_summary_packaging",
+      "status": "secondary",
+      "motivation": "Movie-facing and summary-structure signal. Useful for tracing packaging effects without relying on a high-level movie register label.",
+      "member_atoms": [
+        "sentence_length_balance",
+        "compression_vs_elaboration",
+        "narrative_engagement_stance",
+        "quotation_style",
+        "entity_grid_coherence"
+      ],
+      "readout_bundles": [
+        "narrative_packaging"
+      ]
+    },
+    {
+      "bundle_id": "benefit_sales_packaging",
+      "status": "secondary",
+      "motivation": "Product-facing rhetoric that separates benefit framing from generic assistant formatting.",
+      "member_atoms": [
+        "feature_benefit_call_to_value_script",
+        "benefit_first_packaging",
+        "enthusiasm_or_salesmanship",
+        "promotional_adjectives"
+      ],
+      "readout_bundles": [
+        "promotional_tone"
+      ]
+    }
+  ],
+  "readout_only_variables": {
+    "bundle_readouts": [
+      "academic_formality",
+      "template_packaging",
+      "promotional_tone",
+      "narrative_packaging",
+      "safety_corporate_tone",
+      "stance_calibration",
+      "job_application_professional_register",
+      "helpdesk_assistant_register"
+    ],
+    "atom_or_register_readouts": [
+      "movie_synopsis_register",
+      "product_pitch_register"
+    ]
+  },
+  "priority_atoms": [
+    "nominalization_patterns",
+    "formal_connectives",
+    "authoritative_certainty",
+    "booster_certainty_markers",
+    "self_mention_markers",
+    "bullet_or_list_structure",
+    "helpful_assistant_wrapper",
+    "sentence_length_balance",
+    "compression_vs_elaboration"
+  ],
+  "candidate_holdouts": [
+    "safety_corporate_tone",
+    "compliance_or_safety_stance",
+    "disclaimer_lexicon"
+  ]
+}

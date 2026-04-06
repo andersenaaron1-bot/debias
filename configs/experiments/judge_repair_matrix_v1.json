@@ -1,0 +1,110 @@
+{
+  "version": "judge_repair_matrix_v1",
+  "description": "Canonical experiment matrix separating a neutral anchor judge from repair interventions by objective channel.",
+  "base_template": {
+    "model_id": "google/gemma-2-9b-it",
+    "pref_train_jsonl": "data/derived/pref_pairs_shp2/pref_pairs_train.jsonl",
+    "pref_val_jsonl": "data/derived/pref_pairs_shp2/pref_pairs_val.jsonl",
+    "anchor_train_jsonl": "data/derived/helpsteer2_anchor/anchor_train.jsonl",
+    "anchor_val_jsonl": "data/derived/helpsteer2_anchor/anchor_val.jsonl",
+    "style_train_jsonl": "data/derived/style_groups/m2_publishable_v1/style_groups_train.jsonl",
+    "style_val_jsonl": "data/derived/style_groups/m2_publishable_v1/style_groups_val.jsonl",
+    "cue_train_jsonl": "data/derived/cue_discovery_v2/balanced_splits/corpus_scored_balanced_train.jsonl",
+    "cue_val_jsonl": "data/derived/cue_discovery_v2/balanced_splits/corpus_scored_balanced_val.jsonl",
+    "train_args": {
+      "use_4bit": true,
+      "bf16": true,
+      "gradient_checkpointing": true,
+      "lora_r": 32,
+      "lora_alpha": 64,
+      "lora_dropout": 0.05,
+      "max_steps": 4500,
+      "warmup_steps": 250,
+      "gradient_accumulation_steps": 4,
+      "logging_steps": 50,
+      "eval_steps": 500,
+      "save_steps": 1000,
+      "eval_batch_size": 16,
+      "pref_eval_pairs": 256,
+      "anchor_eval_rows": 512,
+      "inv_eval_groups_per_axis": 16,
+      "cue_eval_rows": 512,
+      "pref_prob": 0.45,
+      "anchor_prob": 0.2,
+      "cue_prob": 0.15,
+      "pref_batch_pairs": 8,
+      "anchor_batch_size": 16,
+      "inv_batch_groups": 16,
+      "cue_batch_size": 16,
+      "lambda_max": 0.2,
+      "lambda_ramp_frac": 0.1,
+      "lambda_group": 0.25,
+      "lambda_anchor_utility": 1.0,
+      "lambda_anchor_attr": 1.0,
+      "lambda_cue": 1.0,
+      "cue_grl_scale": 1.0,
+      "anchor_attribute_names": [
+        "helpfulness",
+        "correctness",
+        "coherence",
+        "complexity",
+        "verbosity"
+      ],
+      "cue_families": [
+        "academic_formality",
+        "safety_corporate_tone",
+        "promotional_sales_tone",
+        "narrative_packaging",
+        "template_boilerplate",
+        "verbosity_compression",
+        "hedging_certainty"
+      ]
+    }
+  },
+  "anchor_judge": {
+    "name": "j0_anchor_v1",
+    "description": "Anchor judge trained on generic preference plus HelpSteer2 anchor supervision, with no paired invariance stream and no cue-adversarial removal.",
+    "output_dir": "artifacts/reward/j0_anchor_v1",
+    "train_arg_overrides": {
+      "pref_prob": 0.69,
+      "anchor_prob": 0.31,
+      "cue_prob": 0.0,
+      "lambda_max": 0.0,
+      "lambda_cue": 0.0,
+      "cue_families": []
+    },
+    "top_level_overrides": {
+      "cue_train_jsonl": null,
+      "cue_val_jsonl": null
+    }
+  },
+  "full_repair": {
+    "name": "jrepair_all_v1",
+    "description": "Full repair judge with paired invariance plus cue-adversarial removal across all currently supported cue families.",
+    "output_dir": "artifacts/reward/jrepair_all_v1"
+  },
+  "cue_family_leave_one_out": [
+    "academic_formality",
+    "safety_corporate_tone",
+    "promotional_sales_tone",
+    "narrative_packaging",
+    "template_boilerplate",
+    "verbosity_compression",
+    "hedging_certainty"
+  ],
+  "invariance_axis_leave_one_out": [
+    "formality",
+    "detox_tone",
+    "fluency",
+    "paraphrase_surface"
+  ],
+  "joint_ablation_map": [
+    {
+      "joint_name": "academic_formality",
+      "cue_family": "academic_formality",
+      "style_axis": "formality",
+      "style_train_jsonl": "data/derived/style_groups/m3_publishable_v1/style_groups_train.jsonl",
+      "style_val_jsonl": "data/derived/style_groups/m3_publishable_v1/style_groups_val.jsonl"
+    }
+  ]
+}
