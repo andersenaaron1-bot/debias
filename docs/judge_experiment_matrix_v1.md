@@ -12,6 +12,9 @@ The repair matrix should not define the ontology by itself.
 Instead, the repair matrix is used to test whether specific intervention channels
 change the same cue pathways that are later traced mechanistically.
 
+It is a `diagnostic intervention suite`, not yet the final ideal intervention
+suite for the paper.
+
 ## Canonical Model Roles
 
 ### `J0`
@@ -19,6 +22,7 @@ change the same cue pathways that are later traced mechanistically.
 The neutral anchor judge.
 
 - config: [j0_anchor_v1.json](C:/Users/King%20Kong/Desktop/AIAIBIAS/AISafety/configs/experiments/j0_anchor_v1.json)
+- fallback config: [j0_anchor_v1_h100safe.json](C:/Users/King%20Kong/Desktop/AIAIBIAS/AISafety/configs/experiments/j0_anchor_v1_h100safe.json)
 - trained on:
   - SHP preference supervision
   - HelpSteer2 anchor supervision
@@ -27,6 +31,11 @@ The neutral anchor judge.
   - cue-adversarial removal
 
 This is the main ecological and mechanistic anchor.
+
+`j0_anchor_v1_h100safe` should be treated as a runtime-equivalent fallback, not
+as a new experimental condition. It keeps the same objective family and overall
+schedule, while reducing train/eval microbatches to avoid marginal OOM on a
+single H100.
 
 ### `Jrepair-all`
 
@@ -40,6 +49,23 @@ The full repair judge.
   - cue-adversarial removal
 
 This is the main repaired comparison model.
+
+## What This Matrix Is And Is Not
+
+This matrix is:
+
+- a source of controlled behavioral perturbations
+- a necessity-test suite for current repair families
+- a bridge into mechanistic tracing
+
+This matrix is not:
+
+- the full ontology
+- the final intervention design
+- a one-to-one reflection of the D4 reduced ontology
+
+The final intervention design should be revisited only after the first
+mechanistic pass on `J0`, `Jrepair-all`, and the first-wave ablations.
 
 ## Why `J0` Is Cleaner Than Using Only `M2`/`M3`
 
@@ -98,6 +124,11 @@ Right now the strongest justified joint case is:
 
 This is the principled replacement for treating `M3` as a one-off experiment.
 
+That joint academic run should be read as:
+
+- a positive-control manipulation check
+- not a final proof that academic formality is the uniquely causal family
+
 ## Current Mapping To Older Runs
 
 For continuity:
@@ -125,6 +156,20 @@ That separation makes the project defensible as a layered program:
 - test ecological relevance
 - localize them mechanistically
 - compare training-time repairs and feature-level interventions
+
+## How The Matrix Feeds The Mechanistic Section
+
+The intended sequence is:
+
+1. run `D3` on `J0`
+2. run `D3` on `Jrepair-all`
+3. run `D3` on the first-wave leave-one-out variants
+4. identify which D4 atoms and bundles are active in `J0`
+5. identify which of those are attenuated in `Jrepair-all`
+6. identify which of those reappear when specific repair components are removed
+
+Only after those comparisons are frozen should the project define the next,
+mechanism-informed intervention target.
 
 ## Generator
 

@@ -6,6 +6,7 @@ This repo is focused on one project:
 
 Active planning docs:
 
+- [docs/project_charter_v2.md](docs/project_charter_v2.md)
 - [docs/final_training_recipe_v1.md](docs/final_training_recipe_v1.md)
 - [docs/research_backbone_icml2026.md](docs/research_backbone_icml2026.md)
 - [docs/mech_interp_judge_research_plan.md](docs/mech_interp_judge_research_plan.md)
@@ -19,6 +20,13 @@ Active planning docs:
 - [docs/judge_experiment_matrix_v1.md](docs/judge_experiment_matrix_v1.md)
 - [docs/corpus_specification_bundle_creation_v1.md](docs/corpus_specification_bundle_creation_v1.md)
 - [docs/external_excerpt_staging_v1.md](docs/external_excerpt_staging_v1.md)
+
+Current planning rule:
+
+- treat the ontology/tracing pipeline and the repair matrix as linked but distinct programs
+- treat `J0`/`Jrepair-*` as a diagnostic intervention suite
+- redesign the final intervention target only after the first D4 tracing pass
+- when `J0` is memory-fragile on single-GPU H100, use `configs/experiments/j0_anchor_v1_h100safe.json` as the runtime-equivalent fallback
 
 Bundle-creation corpus helpers:
 
