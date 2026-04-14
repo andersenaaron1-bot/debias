@@ -27,6 +27,7 @@ Current planning rule:
 - treat `J0`/`Jrepair-*` as a diagnostic intervention suite
 - redesign the final intervention target only after the first D4 tracing pass
 - when `J0` is memory-fragile on single-GPU H100, use `configs/experiments/j0_anchor_v1_h100safe.json` as the runtime-equivalent fallback
+- if that still OOMs, use `configs/experiments/j0_anchor_v1_h100compact.json` before changing the underlying training code path
 
 Bundle-creation corpus helpers:
 

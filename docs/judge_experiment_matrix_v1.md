@@ -23,6 +23,7 @@ The neutral anchor judge.
 
 - config: [j0_anchor_v1.json](C:/Users/King%20Kong/Desktop/AIAIBIAS/AISafety/configs/experiments/j0_anchor_v1.json)
 - fallback config: [j0_anchor_v1_h100safe.json](C:/Users/King%20Kong/Desktop/AIAIBIAS/AISafety/configs/experiments/j0_anchor_v1_h100safe.json)
+- compact fallback: [j0_anchor_v1_h100compact.json](C:/Users/King%20Kong/Desktop/AIAIBIAS/AISafety/configs/experiments/j0_anchor_v1_h100compact.json)
 - trained on:
   - SHP preference supervision
   - HelpSteer2 anchor supervision
@@ -36,6 +37,10 @@ This is the main ecological and mechanistic anchor.
 as a new experimental condition. It keeps the same objective family and overall
 schedule, while reducing train/eval microbatches to avoid marginal OOM on a
 single H100.
+
+`j0_anchor_v1_h100compact` is the next fallback only if `j0_anchor_v1_h100safe`
+still sits on the memory cliff. It reduces the same microbatch-related knobs
+further, but should still be interpreted as the same anchor condition.
 
 ### `Jrepair-all`
 
