@@ -1,5 +1,10 @@
 # AISafety
 
+`AGENTS.md` is the canonical project charter and single source of truth for
+current scope, experiment design, ontology status, and intervention framing.
+If this file or any `docs/` note conflicts with `AGENTS.md`, follow
+`AGENTS.md`.
+
 This repo is focused on one project:
 
 - Train and evaluate LoRA reward adapters that are as invariant as possible to stylistic or surface-form variation, so preference judgments depend on content rather than expression.
@@ -72,6 +77,7 @@ python -m aisafety.scripts.eval_laurito_bias_reward --help
 python -m aisafety.scripts.build_hc3_trials_csv --help
 python -m aisafety.scripts.eval_triads_reward --help
 python -m aisafety.scripts.eval_reward_benchmarks --help
+python -m aisafety.scripts.summarize_judge_suite --help
 ```
 
 These cover:
