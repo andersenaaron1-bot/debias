@@ -1,0 +1,18 @@
+{
+  "name": "d4_dataset_pack_v1",
+  "description": "First canonical D4 dataset pack for atom-first mechanistic tracing. This pack freezes the current broad D4 panel, reuses the broad bundle-creation corpus for atom probes, carries the Laurito ecology comparisons from the first-wave adapter suite, and adds a content-anchor pair set from held-out SHP preference data.",
+  "d4_ontology_json": "configs/ontology/d4_reduced_ontology_v1.json",
+  "atom_probe_jsonl": "data/derived/bundle_creation_corpus_v1/all_records.jsonl",
+  "content_anchor_jsonl": "data/derived/pref_pairs_shp2/pref_pairs_val.jsonl",
+  "rewrite_glob": "data/derived/openrouter_style_pairs_test/*.jsonl",
+  "d3_root": "artifacts/style_groups",
+  "run_ids": [
+    "j0_anchor_v1_h100compact",
+    "jrepair_all_v1",
+    "jrepair_loo_joint_academic_formality_v1",
+    "jrepair_loo_cue_template_boilerplate_v1",
+    "jrepair_loo_cue_hedging_certainty_v1"
+  ],
+  "canonical_text_score_run": "j0_anchor_v1_h100compact",
+  "out_dir": "data/derived/d4_dataset_pack_v1"
+}
