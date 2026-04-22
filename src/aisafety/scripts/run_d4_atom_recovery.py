@@ -168,13 +168,28 @@ def _build_atom_label_frame(
     return out
 
 
+def _content_pair_id(row: dict[str, Any], *, index: int) -> str:
+    pair_id = str(row.get("pair_id") or "").strip()
+    if pair_id:
+        return pair_id
+    parts = [
+        str(row.get("source_dataset") or ""),
+        str(row.get("domain") or ""),
+        str(row.get("prompt") or ""),
+        str(row.get("chosen_text") or row.get("chosen") or ""),
+        str(row.get("rejected_text") or row.get("rejected") or ""),
+        str(index),
+    ]
+    return f"synthetic:{_sha1_hex(chr(31).join(parts))}"
+
+
 def _flatten_content_pairs(rows: list[dict[str, Any]], *, seed: int, max_pairs: int) -> pd.DataFrame:
-    ordered = sorted(rows, key=lambda r: _sha1_hex(str(r.get("pair_id") or "")))
+    indexed_rows = [(_content_pair_id(row, index=i), row) for i, row in enumerate(rows)]
+    ordered = sorted(indexed_rows, key=lambda item: _sha1_hex(item[0]))
     if max_pairs > 0:
         ordered = ordered[: int(max_pairs)]
     text_rows: list[dict[str, Any]] = []
-    for row in ordered:
-        pair_id = str(row.get("pair_id") or "")
+    for pair_id, row in ordered:
         split = assign_group_split(pair_id, seed=int(seed), train_frac=0.8, val_frac=0.1)
         for label, key in ((1, "chosen_text"), (0, "rejected_text")):
             text_rows.append(
