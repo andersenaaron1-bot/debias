@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--probe-c", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=DEFAULT_SEED)
     p.add_argument("--use-4bit", action="store_true")
+    p.add_argument(
+        "--content-anchor-only",
+        action="store_true",
+        help="Only recompute the content-anchor utility control outputs.",
+    )
     p.add_argument("--out-dir", type=Path, default=Path("artifacts") / "mechanistic" / "d4_j0_atom_recovery_v1")
     return p.parse_args()
 
@@ -168,11 +174,19 @@ def _build_atom_label_frame(
     return out
 
 
-def _content_pair_id(row: dict[str, Any], *, index: int) -> str:
+def _raw_content_pair_id(row: dict[str, Any]) -> str:
     pair_id = str(row.get("pair_id") or "").strip()
-    if pair_id:
+    if pair_id and pair_id.lower() not in {"nan", "none", "null"}:
+        return pair_id
+    return ""
+
+
+def _content_pair_id(row: dict[str, Any], *, index: int, id_counts: Counter[str]) -> str:
+    pair_id = _raw_content_pair_id(row)
+    if pair_id and id_counts[pair_id] == 1:
         return pair_id
     parts = [
+        pair_id,
         str(row.get("source_dataset") or ""),
         str(row.get("domain") or ""),
         str(row.get("prompt") or ""),
@@ -184,7 +198,8 @@ def _content_pair_id(row: dict[str, Any], *, index: int) -> str:
 
 
 def _flatten_content_pairs(rows: list[dict[str, Any]], *, seed: int, max_pairs: int) -> pd.DataFrame:
-    indexed_rows = [(_content_pair_id(row, index=i), row) for i, row in enumerate(rows)]
+    id_counts = Counter(_raw_content_pair_id(row) for row in rows)
+    indexed_rows = [(_content_pair_id(row, index=i, id_counts=id_counts), row) for i, row in enumerate(rows)]
     ordered = sorted(indexed_rows, key=lambda item: _sha1_hex(item[0]))
     if max_pairs > 0:
         ordered = ordered[: int(max_pairs)]
@@ -469,6 +484,12 @@ def _run_content_anchor_utility_sweep(
     return pd.DataFrame(rows)
 
 
+def _best_content_anchor_layer(utility_df: pd.DataFrame) -> dict[str, Any] | None:
+    if utility_df.empty or utility_df["val_auc"].dropna().empty:
+        return None
+    return utility_df.sort_values(["val_auc", "test_auc"], ascending=False).iloc[0].to_dict()
+
+
 def _evaluate_laurito_transfer(
     *,
     laurito_df: pd.DataFrame,
@@ -560,6 +581,42 @@ def main() -> None:
         raise RuntimeError("Could not infer num_hidden_layers from backbone config.")
     selected_layers = select_hidden_layers(num_layers, stride=int(args.layer_stride), tail_layers=int(args.tail_layers))
 
+    if bool(args.content_anchor_only):
+        content_anchor_feats = _encode_texts_by_layer(
+            scorer=scorer,
+            tokenizer=tokenizer,
+            texts=content_anchor_df["text"].astype(str).tolist(),
+            selected_layers=selected_layers,
+            batch_size=int(args.batch_size),
+            max_length=int(args.max_length),
+        )
+        utility_df = _run_content_anchor_utility_sweep(
+            content_df=content_anchor_df,
+            layer_features=content_anchor_feats,
+            selected_layers=selected_layers,
+            min_train_examples=int(args.min_train_examples),
+            min_eval_examples=int(args.min_eval_examples),
+            seed=int(args.seed),
+            c_value=float(args.probe_c),
+        )
+        utility_df.to_csv(out_dir / "content_anchor_utility_metrics.csv", index=False)
+        utility_summary = {
+            "manifest_json": str(manifest_path),
+            "reward_run_dir": str(run_dir),
+            "model_id": str(args.model_id),
+            "selected_layers": selected_layers,
+            "num_layers": int(num_layers),
+            "content_anchor_rows": int(len(content_anchor_df)),
+            "content_anchor_split_counts": {
+                str(k): int(v) for k, v in content_anchor_df["split"].value_counts().sort_index().items()
+            },
+            "best_content_anchor_layer": _best_content_anchor_layer(utility_df),
+        }
+        _write_json(out_dir / "content_anchor_utility_summary.json", utility_summary)
+        print(f"Wrote content-anchor utility outputs to {out_dir}")
+        print(f"Wrote summary to {out_dir / 'content_anchor_utility_summary.json'}")
+        return
+
     atom_probe_feats = _encode_texts_by_layer(
         scorer=scorer,
         tokenizer=tokenizer,
@@ -630,11 +687,7 @@ def main() -> None:
         "laurito_rows": int(len(laurito_df)),
         "d4_atoms": d4_atoms,
         "best_atoms_by_val_auc": best_layers_df.head(15).to_dict(orient="records"),
-        "best_content_anchor_layer": (
-            None
-            if utility_df.empty or utility_df["val_auc"].dropna().empty
-            else utility_df.sort_values(["val_auc", "test_auc"], ascending=False).iloc[0].to_dict()
-        ),
+        "best_content_anchor_layer": _best_content_anchor_layer(utility_df),
     }
     _write_json(out_dir / "summary.json", summary)
 

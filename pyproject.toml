@@ -35,6 +35,7 @@ dev = [
     "ruff>=0.6",
 ]
 gpu = ["bitsandbytes>=0.43.0"]
+mech = ["sae-lens>=6.7.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

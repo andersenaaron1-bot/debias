@@ -46,6 +46,7 @@ python -m aisafety.scripts.eval_reward_benchmarks --help
 python -m aisafety.scripts.build_ecological_validation_d3 --help
 python -m aisafety.scripts.build_d4_dataset_pack --help
 python -m aisafety.scripts.run_d4_atom_recovery --help
+python -m aisafety.scripts.run_d4_sae_feature_analysis --help
 python -m aisafety.scripts.score_laurito_trials_reward --help
 python -m aisafety.scripts.summarize_judge_suite --help
 ```

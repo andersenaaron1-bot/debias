@@ -40,6 +40,23 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
         self.assertGreater((flattened["split"] == "val").sum(), 0)
         self.assertGreater((flattened["split"] == "test").sum(), 0)
 
+    def test_flatten_content_pairs_splits_repeated_placeholder_pair_ids(self) -> None:
+        rows = [
+            {
+                "pair_id": "None",
+                "source_dataset": "stanfordnlp/SHP-2",
+                "domain": f"domain-{i % 3}",
+                "prompt": f"Prompt {i}",
+                "chosen_text": f"chosen {i}",
+                "rejected_text": f"rejected {i}",
+            }
+            for i in range(200)
+        ]
+        flattened = _flatten_content_pairs(rows, seed=1234, max_pairs=200)
+        self.assertEqual(len(flattened), 400)
+        self.assertGreater((flattened["split"] == "val").sum(), 0)
+        self.assertGreater((flattened["split"] == "test").sum(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
