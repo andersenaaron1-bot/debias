@@ -37,8 +37,9 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
         ]
         flattened = _flatten_content_pairs(rows, seed=1234, max_pairs=200)
         self.assertEqual(len(flattened), 400)
-        self.assertGreater((flattened["split"] == "val").sum(), 0)
-        self.assertGreater((flattened["split"] == "test").sum(), 0)
+        self.assertEqual((flattened["split"] == "train").sum(), 320)
+        self.assertEqual((flattened["split"] == "val").sum(), 40)
+        self.assertEqual((flattened["split"] == "test").sum(), 40)
 
     def test_flatten_content_pairs_splits_repeated_placeholder_pair_ids(self) -> None:
         rows = [
@@ -54,8 +55,9 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
         ]
         flattened = _flatten_content_pairs(rows, seed=1234, max_pairs=200)
         self.assertEqual(len(flattened), 400)
-        self.assertGreater((flattened["split"] == "val").sum(), 0)
-        self.assertGreater((flattened["split"] == "test").sum(), 0)
+        self.assertEqual((flattened["split"] == "train").sum(), 320)
+        self.assertEqual((flattened["split"] == "val").sum(), 40)
+        self.assertEqual((flattened["split"] == "test").sum(), 40)
 
 
 if __name__ == "__main__":

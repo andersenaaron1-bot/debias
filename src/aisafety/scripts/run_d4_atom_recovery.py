@@ -31,7 +31,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from aisafety.config import DEFAULT_CACHE_DIR, DEFAULT_SEED, PROJECT_ROOT
-from aisafety.data.cue_corpus import assign_group_split
 from aisafety.features.token_positions import take_last_token
 from aisafety.reward.model import load_reward_scorer
 
@@ -200,12 +199,20 @@ def _content_pair_id(row: dict[str, Any], *, index: int, id_counts: Counter[str]
 def _flatten_content_pairs(rows: list[dict[str, Any]], *, seed: int, max_pairs: int) -> pd.DataFrame:
     id_counts = Counter(_raw_content_pair_id(row) for row in rows)
     indexed_rows = [(_content_pair_id(row, index=i, id_counts=id_counts), row) for i, row in enumerate(rows)]
-    ordered = sorted(indexed_rows, key=lambda item: _sha1_hex(item[0]))
+    ordered = sorted(indexed_rows, key=lambda item: _sha1_hex(f"{int(seed)}:{item[0]}"))
     if max_pairs > 0:
         ordered = ordered[: int(max_pairs)]
+    n_pairs = len(ordered)
+    n_train = int(0.8 * n_pairs)
+    n_val = int(0.1 * n_pairs)
     text_rows: list[dict[str, Any]] = []
-    for pair_id, row in ordered:
-        split = assign_group_split(pair_id, seed=int(seed), train_frac=0.8, val_frac=0.1)
+    for pair_index, (pair_id, row) in enumerate(ordered):
+        if pair_index < n_train:
+            split = "train"
+        elif pair_index < n_train + n_val:
+            split = "val"
+        else:
+            split = "test"
         for label, key in ((1, "chosen_text"), (0, "rejected_text")):
             text_rows.append(
                 {
