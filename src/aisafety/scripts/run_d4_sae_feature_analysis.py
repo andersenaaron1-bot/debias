@@ -91,14 +91,19 @@ def _parse_args() -> argparse.Namespace:
 
 def _parse_int_list(value: str) -> list[int]:
     out: list[int] = []
+    seen: set[int] = set()
     for part in str(value or "").split(","):
         part = part.strip()
         if not part:
             continue
-        out.append(int(part))
+        item = int(part)
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
     if not out:
         raise ValueError("Expected at least one selected layer.")
-    return sorted(dict.fromkeys(out))
+    return out
 
 
 def _parse_str_list(value: str | None) -> list[str] | None:

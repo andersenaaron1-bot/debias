@@ -22,8 +22,8 @@ class RunD4SaeFeatureAnalysisHelpersTest(unittest.TestCase):
             "layer_39/width_16k/canonical",
         )
 
-    def test_parse_int_list_deduplicates_and_sorts(self) -> None:
-        self.assertEqual(_parse_int_list("42, 1, 8, 8"), [1, 8, 42])
+    def test_parse_int_list_deduplicates_and_preserves_order(self) -> None:
+        self.assertEqual(_parse_int_list("42, 1, 8, 8"), [42, 1, 8])
 
 
 if __name__ == "__main__":
