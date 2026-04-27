@@ -15,32 +15,34 @@ CSVs after each layer so long runs leave usable partial output.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import roc_auc_score
 
 from aisafety.config import DEFAULT_CACHE_DIR, DEFAULT_SEED, PROJECT_ROOT
-from aisafety.features.token_positions import take_last_token
+from aisafety.mech.bundles import build_bundle_feature_scores
+from aisafety.mech.d4_io import read_json as _read_json
+from aisafety.mech.d4_io import read_jsonl as _read_jsonl
+from aisafety.mech.d4_io import resolve_path as _resolve_path
+from aisafety.mech.d4_io import sha1_hex as _sha1_hex
+from aisafety.mech.d4_io import write_json as _write_json
+from aisafety.mech.labels import build_atom_label_frame as _build_atom_label_frame
+from aisafety.mech.labels import flatten_content_pairs as _flatten_content_pairs
+from aisafety.mech.labels import parse_int_list as _parse_int_list
+from aisafety.mech.labels import parse_str_list as _parse_str_list
+from aisafety.mech.labels import sample_atom_probe_rows as _sample_atom_probe_rows
+from aisafety.mech.labels import split_counts
+from aisafety.mech.metrics import safe_auc as _safe_auc
+from aisafety.mech.metrics import safe_spearman as _safe_spearman
+from aisafety.mech.sae import aggregate_sae_features as _aggregate_sae_features
+from aisafety.mech.sae import format_sae_id
+from aisafety.mech.sae import hidden_layer_to_sae_layer
+from aisafety.mech.sae import load_sae as _load_sae
+from aisafety.mech.sae import sae_d_sae as _sae_d_sae
 from aisafety.reward.model import load_reward_scorer
-from aisafety.scripts.run_d4_atom_recovery import (
-    _build_atom_label_frame,
-    _flatten_content_pairs,
-    _read_json,
-    _read_jsonl,
-    _resolve_path,
-    _sample_atom_probe_rows,
-    _write_json,
-)
-
-
-def _sha1_hex(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -87,133 +89,6 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=DEFAULT_SEED)
     p.add_argument("--out-dir", type=Path, default=Path("artifacts") / "mechanistic" / "d4_j0_sae_feature_analysis_v1")
     return p.parse_args()
-
-
-def _parse_int_list(value: str) -> list[int]:
-    out: list[int] = []
-    seen: set[int] = set()
-    for part in str(value or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
-        item = int(part)
-        if item in seen:
-            continue
-        seen.add(item)
-        out.append(item)
-    if not out:
-        raise ValueError("Expected at least one selected layer.")
-    return out
-
-
-def _parse_str_list(value: str | None) -> list[str] | None:
-    if value is None:
-        return None
-    out = [part.strip() for part in str(value).split(",") if part.strip()]
-    return out or None
-
-
-def hidden_layer_to_sae_layer(hidden_layer: int) -> int:
-    """Map HF hidden_states index to Gemma Scope residual block index."""
-
-    hidden_layer = int(hidden_layer)
-    if hidden_layer <= 0:
-        raise ValueError("hidden_layer must be >= 1 because hidden_states[0] is embeddings.")
-    return hidden_layer - 1
-
-
-def format_sae_id(template: str, *, hidden_layer: int) -> str:
-    sae_layer = hidden_layer_to_sae_layer(hidden_layer)
-    return str(template).format(hidden_layer=int(hidden_layer), sae_layer=int(sae_layer))
-
-
-def _safe_auc(y_true: np.ndarray, scores: np.ndarray) -> float | None:
-    if len(np.unique(y_true)) < 2:
-        return None
-    try:
-        return float(roc_auc_score(y_true, scores))
-    except ValueError:
-        return None
-
-
-def _safe_spearman(x: np.ndarray, y: np.ndarray) -> float | None:
-    if len(x) == 0 or len(y) == 0:
-        return None
-    if float(np.std(x)) <= 1e-12 or float(np.std(y)) <= 1e-12:
-        return None
-    value = pd.Series(x).corr(pd.Series(y), method="spearman")
-    return None if pd.isna(value) else float(value)
-
-
-def _load_sae(*, release: str, sae_id: str, device: torch.device | str):
-    try:
-        from sae_lens import SAE
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError(
-            "sae-lens is required for D4 SAE analysis. Install it with "
-            "`pip install sae-lens` or add the repo optional dependency `.[mech]`."
-        ) from exc
-
-    loaded = SAE.from_pretrained(release=str(release), sae_id=str(sae_id), device=str(device))
-    sae = loaded[0] if isinstance(loaded, tuple) else loaded
-    sae.eval()
-    return sae
-
-
-def _sae_d_sae(sae: Any) -> int:
-    cfg = getattr(sae, "cfg", None)
-    if cfg is not None and hasattr(cfg, "d_sae"):
-        return int(getattr(cfg, "d_sae"))
-    if hasattr(sae, "W_dec"):
-        return int(getattr(sae, "W_dec").shape[0])
-    raise RuntimeError("Could not infer SAE width.")
-
-
-def _sae_encode(sae: Any, x: torch.Tensor) -> torch.Tensor:
-    acts = sae.encode(x)
-    if isinstance(acts, tuple):
-        acts = acts[0]
-    return acts.to(dtype=torch.float32)
-
-
-@torch.inference_mode()
-def _aggregate_sae_features(
-    *,
-    sae: Any,
-    hidden: torch.Tensor,
-    attention_mask: torch.Tensor,
-    padding_side: str,
-    aggregation: str,
-    token_chunk_size: int,
-) -> torch.Tensor:
-    hidden = hidden.detach().to(dtype=torch.float32)
-    aggregation = str(aggregation)
-    if aggregation == "last":
-        pooled = take_last_token(hidden, attention_mask, padding_side=padding_side)
-        return _sae_encode(sae, pooled)
-
-    if aggregation != "max":
-        raise ValueError(f"Unsupported aggregation: {aggregation}")
-
-    batch, seq, dim = hidden.shape
-    del dim
-    d_sae = _sae_d_sae(sae)
-    valid = attention_mask.to(dtype=torch.bool)
-    flat_hidden = hidden.reshape(batch * seq, hidden.shape[-1])[valid.reshape(-1)]
-    flat_ids = (
-        torch.arange(batch, device=hidden.device).unsqueeze(1).expand(batch, seq).reshape(-1)[valid.reshape(-1)]
-    )
-    out = torch.full((batch, d_sae), -torch.inf, device=hidden.device, dtype=torch.float32)
-    chunk_size = max(1, int(token_chunk_size))
-    for start in range(0, flat_hidden.shape[0], chunk_size):
-        end = min(flat_hidden.shape[0], start + chunk_size)
-        acts = _sae_encode(sae, flat_hidden[start:end])
-        ids = flat_ids[start:end]
-        for item_id in torch.unique(ids).tolist():
-            mask = ids == int(item_id)
-            out[int(item_id)] = torch.maximum(out[int(item_id)], acts[mask].amax(dim=0))
-    out[~torch.isfinite(out)] = 0.0
-    return out
 
 
 @torch.inference_mode()
@@ -575,50 +450,6 @@ def _feature_examples_for_layer(
     return examples
 
 
-def _build_bundle_feature_scores(feature_rows: pd.DataFrame, trace_bundles: dict[str, Any]) -> pd.DataFrame:
-    if feature_rows.empty:
-        return pd.DataFrame()
-    ok = feature_rows[feature_rows["status"] == "ok"].copy()
-    if ok.empty:
-        return pd.DataFrame()
-    rows: list[dict[str, Any]] = []
-    for bundle_id, payload in sorted(trace_bundles.items()):
-        member_atoms = [str(atom) for atom in (payload.get("member_atoms") or [])]
-        if not member_atoms:
-            continue
-        sub = ok[ok["atom"].isin(member_atoms)]
-        if sub.empty:
-            continue
-        group_cols = ["hidden_layer", "sae_layer", "sae_release", "sae_id", "aggregation", "feature_idx"]
-        for key, grp in sub.groupby(group_cols):
-            hidden_layer, sae_layer, sae_release, sae_id, aggregation, feature_idx = key
-            atoms = sorted(set(str(atom) for atom in grp["atom"].tolist()))
-            rows.append(
-                {
-                    "bundle_id": str(bundle_id),
-                    "status": str(payload.get("status") or ""),
-                    "hidden_layer": int(hidden_layer),
-                    "sae_layer": int(sae_layer),
-                    "sae_release": str(sae_release),
-                    "sae_id": str(sae_id),
-                    "aggregation": str(aggregation),
-                    "feature_idx": int(feature_idx),
-                    "n_member_atoms_hit": int(len(atoms)),
-                    "member_atoms_hit": ";".join(atoms),
-                    "mean_abs_cohen_d": float(grp["abs_cohen_d"].astype(float).mean()),
-                    "max_val_auc": float(grp["val_auc"].astype(float).max()),
-                    "mean_laurito_abs_spearman": float(
-                        grp["laurito_spearman_with_atom_score"].astype(float).abs().mean()
-                    )
-                    if "laurito_spearman_with_atom_score" in grp.columns
-                    else None,
-                }
-            )
-    return pd.DataFrame(rows).sort_values(
-        ["n_member_atoms_hit", "mean_abs_cohen_d", "max_val_auc"], ascending=False
-    )
-
-
 def _feature_set_manifest(
     *,
     args: argparse.Namespace,
@@ -681,7 +512,7 @@ def _write_tables(
             how="left",
         )
 
-    bundle_df = _build_bundle_feature_scores(atom_df, trace_bundles=trace_bundles)
+    bundle_df = build_bundle_feature_scores(atom_df, trace_bundles=trace_bundles)
     atom_df.to_csv(out_dir / "sae_atom_feature_scores.csv", index=False)
     bundle_df.to_csv(out_dir / "sae_bundle_feature_scores.csv", index=False)
     decision_df.to_csv(out_dir / "sae_laurito_decision_alignment.csv", index=False)
@@ -871,6 +702,9 @@ def main() -> None:
         feature_manifest["atom_probe_rows"] = int(len(atom_probe_df))
         feature_manifest["laurito_rows"] = int(len(laurito_df))
         feature_manifest["content_anchor_rows"] = 0 if content_anchor_df is None else int(len(content_anchor_df))
+        feature_manifest["content_anchor_split_counts"] = (
+            {} if content_anchor_df is None else split_counts(content_anchor_df)
+        )
         _write_json(out_dir / "sae_feature_set_manifest.json", feature_manifest)
         print(f"Completed hidden layer {hidden_layer} with SAE {sae_id}")
 

@@ -16,9 +16,6 @@ stage for later SAE feature analysis and mechanistic permutability checks.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -26,53 +23,23 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from aisafety.config import DEFAULT_CACHE_DIR, DEFAULT_SEED, PROJECT_ROOT
 from aisafety.features.token_positions import take_last_token
+from aisafety.mech.d4_io import read_json as _read_json
+from aisafety.mech.d4_io import read_jsonl as _read_jsonl
+from aisafety.mech.d4_io import resolve_path as _resolve_path
+from aisafety.mech.d4_io import write_json as _write_json
+from aisafety.mech.labels import build_atom_label_frame as _build_atom_label_frame
+from aisafety.mech.labels import flatten_content_pairs as _flatten_content_pairs
+from aisafety.mech.labels import sample_atom_probe_rows as _sample_atom_probe_rows
+from aisafety.mech.labels import select_hidden_layers
+from aisafety.mech.labels import split_counts
+from aisafety.mech.metrics import safe_auc as _safe_auc
 from aisafety.reward.model import load_reward_scorer
-
-
-def _sha1_hex(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        payload = json.load(f)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object at {path}")
-    return payload
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            row = json.loads(line)
-            if isinstance(row, dict):
-                rows.append(row)
-    return rows
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, sort_keys=True)
-
-
-def _resolve_path(base_dir: Path, value: str | None) -> Path | None:
-    if value is None:
-        return None
-    path = Path(value)
-    if path.is_absolute():
-        return path
-    return (base_dir / path).resolve()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -107,124 +74,6 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--out-dir", type=Path, default=Path("artifacts") / "mechanistic" / "d4_j0_atom_recovery_v1")
     return p.parse_args()
-
-
-def select_hidden_layers(num_layers: int, *, stride: int, tail_layers: int) -> list[int]:
-    if num_layers <= 0:
-        raise ValueError("num_layers must be positive")
-    selected = {1, num_layers}
-    step = max(1, int(stride))
-    selected.update(range(step, num_layers + 1, step))
-    tail = max(0, int(tail_layers))
-    if tail:
-        selected.update(range(max(1, num_layers - tail + 1), num_layers + 1))
-    return sorted(int(x) for x in selected if 1 <= int(x) <= num_layers)
-
-
-def _sample_atom_probe_rows(
-    rows: list[dict[str, Any]],
-    *,
-    max_train_per_item_type: int,
-    max_val_per_item_type: int,
-    max_test_per_item_type: int,
-) -> pd.DataFrame:
-    limits = {
-        "train": int(max_train_per_item_type),
-        "val": int(max_val_per_item_type),
-        "test": int(max_test_per_item_type),
-    }
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for row in rows:
-        key = (str(row.get("split") or ""), str(row.get("item_type") or ""))
-        grouped.setdefault(key, []).append(row)
-
-    kept: list[dict[str, Any]] = []
-    for (split, item_type), grp in grouped.items():
-        limit = limits.get(split, 0)
-        ordered = sorted(grp, key=lambda r: _sha1_hex(str(r.get("example_id") or r.get("text") or "")))
-        if limit > 0:
-            ordered = ordered[:limit]
-        kept.extend(ordered)
-    return pd.DataFrame(kept)
-
-
-def _build_atom_label_frame(
-    df: pd.DataFrame,
-    *,
-    atoms: list[str],
-    q: float,
-) -> pd.DataFrame:
-    out = df.copy()
-    for atom in atoms:
-        label_col = f"{atom}__label"
-        out[label_col] = -1
-        for item_type, grp in out.groupby("item_type"):
-            train_scores = grp.loc[grp["split"] == "train", "atom_scores"].map(lambda d: float((d or {}).get(atom, 0.0)))
-            if train_scores.empty:
-                continue
-            lo = float(train_scores.quantile(1.0 - float(q)))
-            hi = float(train_scores.quantile(float(q)))
-            grp_scores = grp["atom_scores"].map(lambda d: float((d or {}).get(atom, 0.0)))
-            pos_idx = grp.index[grp_scores >= hi]
-            neg_idx = grp.index[grp_scores <= lo]
-            out.loc[pos_idx, label_col] = 1
-            out.loc[neg_idx, label_col] = 0
-        out[f"{atom}__score"] = out["atom_scores"].map(lambda d: float((d or {}).get(atom, 0.0)))
-    return out
-
-
-def _raw_content_pair_id(row: dict[str, Any]) -> str:
-    pair_id = str(row.get("pair_id") or "").strip()
-    if pair_id and pair_id.lower() not in {"nan", "none", "null"}:
-        return pair_id
-    return ""
-
-
-def _content_pair_id(row: dict[str, Any], *, index: int, id_counts: Counter[str]) -> str:
-    pair_id = _raw_content_pair_id(row)
-    if pair_id and id_counts[pair_id] == 1:
-        return pair_id
-    parts = [
-        pair_id,
-        str(row.get("source_dataset") or ""),
-        str(row.get("domain") or ""),
-        str(row.get("prompt") or ""),
-        str(row.get("chosen_text") or row.get("chosen") or ""),
-        str(row.get("rejected_text") or row.get("rejected") or ""),
-        str(index),
-    ]
-    return f"synthetic:{_sha1_hex(chr(31).join(parts))}"
-
-
-def _flatten_content_pairs(rows: list[dict[str, Any]], *, seed: int, max_pairs: int) -> pd.DataFrame:
-    id_counts = Counter(_raw_content_pair_id(row) for row in rows)
-    indexed_rows = [(_content_pair_id(row, index=i, id_counts=id_counts), row) for i, row in enumerate(rows)]
-    ordered = sorted(indexed_rows, key=lambda item: _sha1_hex(f"{int(seed)}:{item[0]}"))
-    if max_pairs > 0:
-        ordered = ordered[: int(max_pairs)]
-    n_pairs = len(ordered)
-    n_train = int(0.8 * n_pairs)
-    n_val = int(0.1 * n_pairs)
-    text_rows: list[dict[str, Any]] = []
-    for pair_index, (pair_id, row) in enumerate(ordered):
-        if pair_index < n_train:
-            split = "train"
-        elif pair_index < n_train + n_val:
-            split = "val"
-        else:
-            split = "test"
-        for label, key in ((1, "chosen_text"), (0, "rejected_text")):
-            text_rows.append(
-                {
-                    "pair_id": pair_id,
-                    "split": split,
-                    "label": int(label),
-                    "domain": row.get("domain"),
-                    "source_dataset": row.get("source_dataset"),
-                    "text": str(row.get(key) or ""),
-                }
-            )
-    return pd.DataFrame(text_rows)
 
 
 @torch.inference_mode()
@@ -270,15 +119,6 @@ def _encode_texts_by_layer(
             torch.cuda.empty_cache()
 
     return {layer: np.concatenate(chunks, axis=0) if chunks else np.zeros((0, scorer.hidden_size), dtype=np.float32) for layer, chunks in outputs.items()}
-
-
-def _safe_auc(y_true: np.ndarray, scores: np.ndarray) -> float | None:
-    if len(np.unique(y_true)) < 2:
-        return None
-    try:
-        return float(roc_auc_score(y_true, scores))
-    except ValueError:
-        return None
 
 
 def _fit_sparse_probe(
@@ -614,9 +454,7 @@ def main() -> None:
             "selected_layers": selected_layers,
             "num_layers": int(num_layers),
             "content_anchor_rows": int(len(content_anchor_df)),
-            "content_anchor_split_counts": {
-                str(k): int(v) for k, v in content_anchor_df["split"].value_counts().sort_index().items()
-            },
+            "content_anchor_split_counts": split_counts(content_anchor_df),
             "best_content_anchor_layer": _best_content_anchor_layer(utility_df),
         }
         _write_json(out_dir / "content_anchor_utility_summary.json", utility_summary)
@@ -691,6 +529,7 @@ def main() -> None:
         "num_layers": int(num_layers),
         "atom_probe_rows": int(len(atom_probe_df)),
         "content_anchor_rows": int(len(content_anchor_df)),
+        "content_anchor_split_counts": split_counts(content_anchor_df),
         "laurito_rows": int(len(laurito_df)),
         "d4_atoms": d4_atoms,
         "best_atoms_by_val_auc": best_layers_df.head(15).to_dict(orient="records"),

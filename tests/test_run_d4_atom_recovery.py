@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from aisafety.scripts.run_d4_atom_recovery import _build_atom_label_frame, _flatten_content_pairs, select_hidden_layers
+from aisafety.mech.labels import build_atom_label_frame, flatten_content_pairs, select_hidden_layers
 
 
 class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
@@ -19,7 +19,7 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
                 {"split": "val", "item_type": "paper", "atom_scores": {"formal_connectives": 1.2}},
             ]
         )
-        labeled = _build_atom_label_frame(df, atoms=["formal_connectives"], q=0.8)
+        labeled = build_atom_label_frame(df, atoms=["formal_connectives"], q=0.8)
         labels = labeled["formal_connectives__label"].tolist()
         self.assertIn(0, labels)
         self.assertIn(1, labels)
@@ -35,7 +35,7 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
             }
             for i in range(200)
         ]
-        flattened = _flatten_content_pairs(rows, seed=1234, max_pairs=200)
+        flattened = flatten_content_pairs(rows, seed=1234, max_pairs=200)
         self.assertEqual(len(flattened), 400)
         self.assertEqual((flattened["split"] == "train").sum(), 320)
         self.assertEqual((flattened["split"] == "val").sum(), 40)
@@ -53,7 +53,7 @@ class RunD4AtomRecoveryHelpersTest(unittest.TestCase):
             }
             for i in range(200)
         ]
-        flattened = _flatten_content_pairs(rows, seed=1234, max_pairs=200)
+        flattened = flatten_content_pairs(rows, seed=1234, max_pairs=200)
         self.assertEqual(len(flattened), 400)
         self.assertEqual((flattened["split"] == "train").sum(), 320)
         self.assertEqual((flattened["split"] == "val").sum(), 40)

@@ -1,9 +1,9 @@
 import unittest
 
-from aisafety.scripts.run_d4_sae_feature_analysis import (
+from aisafety.mech.labels import parse_int_list
+from aisafety.mech.sae import (
     format_sae_id,
     hidden_layer_to_sae_layer,
-    _parse_int_list,
 )
 
 
@@ -23,7 +23,7 @@ class RunD4SaeFeatureAnalysisHelpersTest(unittest.TestCase):
         )
 
     def test_parse_int_list_deduplicates_and_preserves_order(self) -> None:
-        self.assertEqual(_parse_int_list("42, 1, 8, 8"), [42, 1, 8])
+        self.assertEqual(parse_int_list("42, 1, 8, 8"), [42, 1, 8])
 
 
 if __name__ == "__main__":
