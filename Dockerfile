@@ -24,7 +24,7 @@ COPY docs /workspace/docs
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
     python -m pip install -r /tmp/requirements-cluster.txt && \
-    python -m pip install -e .
+    python -m pip install -e ".[mech]"
 
 RUN mkdir -p /cache/huggingface /workspace/outputs
 
