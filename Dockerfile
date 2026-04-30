@@ -20,16 +20,11 @@ COPY requirements/cluster.txt /tmp/requirements-cluster.txt
 COPY pyproject.toml README.md /workspace/
 COPY src /workspace/src
 COPY configs /workspace/configs
-COPY docs /workspace/docs
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
     python -m pip install -r /tmp/requirements-cluster.txt && \
-    python -m pip install -e ".[mech]" && \
-    python -m pip install --force-reinstall --no-deps \
-      --index-url https://download.pytorch.org/whl/cu121 \
-      torchvision==0.19.1 && \
-    python -c "import torch, torchvision, transformers, sae_lens, aisafety; print('torch', torch.__version__); print('torchvision', torchvision.__version__); print('sae_lens ok')"
+    python -m pip install ".[mech]" && \
+    (python -m pip uninstall -y torchvision || true) && \
+    python -c "import torch, transformers, sae_lens, aisafety; print('torch', torch.__version__); print('sae_lens ok')"
 
 RUN mkdir -p /cache/huggingface /workspace/outputs
-
-ENTRYPOINT ["python", "-m", "aisafety.scripts.run_experiment_config"]

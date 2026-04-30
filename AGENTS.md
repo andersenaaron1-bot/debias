@@ -38,18 +38,94 @@ All GPU, model, dataset-pack, reward-evaluation, SAE, and intervention runs are
 LRZ runs. The local workstation is for editing, file inspection, and lightweight
 unit tests only.
 
-Standard LRZ environment variables:
+LRZ workflow facts:
+
+- LRZ AI Systems use Slurm for batch jobs.
+- LRZ AI Systems use Enroot/Pyxis for containers. Use Slurm container flags,
+  not local `docker`.
+- Enroot is not available on SSH login nodes. Container tests must be submitted
+  as Slurm jobs.
+- `lrz-cpu` is the CPU partition and requires `--qos=cpu`.
+- GPU partitions require `--gres=gpu:1` or the appropriate GPU request.
+- Tools such as local `module`, `conda`, and `pip` are not the project
+  dependency strategy on LRZ. Use the project container.
+- The code checkout may be small and live under `~/debias`; large artifacts and
+  derived data may live on DSS. Do not assume `~/debias/artifacts` or
+  `~/debias/data/derived` contains the real run outputs.
+
+Primary paths for the current LRZ state:
 
 ```bash
-export WORKDIR=/path/to/aisafety
-export HF_HOME=$WORKDIR/.cache/huggingface
+export WORKDIR=$HOME/debias
+export ARTROOT=/dss/dssfs04/lwp-dss-0002/pn76ko/pn76ko-dss-0000/proc_mining_dfg/go75meh2/debias
+export IMAGE=ghcr.io#andersenaaron1-bot/debias:sae-mech-v1
+export PYTHONPATH=$WORKDIR/src
+export HF_HOME=$ARTROOT/.cache/huggingface
 export TRANSFORMERS_CACHE=$HF_HOME/transformers
 export HF_DATASETS_CACHE=$HF_HOME/datasets
 export PYTHONUNBUFFERED=1
 ```
 
-When using Slurm, keep logs with the job output and copy important logs into
-the artifact directory before interpreting results.
+Use `WORKDIR` for the current code and `ARTROOT` for existing data, adapters,
+cache, logs, and mechanistic outputs. Prefer absolute paths for Slurm commands.
+
+Container syntax on LRZ:
+
+```bash
+--container-image="$IMAGE"
+--container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace"
+--container-workdir="$WORKDIR"
+--container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE
+```
+
+For GHCR images, Pyxis/Enroot uses `#` between registry and image path:
+
+```bash
+ghcr.io#andersenaaron1-bot/debias:sae-mech-v1
+```
+
+Use `sae-mech-v1` for SAE work. The image is intentionally headless and should
+not import `torchvision`; the SAE/text stack does not need it, and optional
+vision imports have caused `torchvision::nms` binary-registration failures on
+LRZ.
+
+If GHCR import fails, the image may be private or credentials may be missing.
+Resolve the container import first; do not fall back to system Python for model
+or SAE jobs.
+
+NGC fallback:
+
+- `nvcr.io#nvidia/pytorch:24.05-py3` imports on LRZ and provides a public
+  PyTorch/CUDA base.
+- That NGC image uses Python 3.10. Do not install `requirements/cluster.txt`
+  unchanged into it because the repo cluster file currently pins Python 3.11+
+  packages such as `numpy==2.3.5`.
+- If using the NGC fallback, install Python 3.10-compatible dependencies into a
+  DSS `--target` directory and prepend that directory to `PYTHONPATH`.
+- Do not use `python -m venv` in that NGC image; it lacks `ensurepip`.
+
+NGC dependency setup, CPU partition:
+
+```bash
+cd "$WORKDIR" && DEPS="$ARTROOT/.python_deps/sae-ngc-24.05-py310" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=setup-sae-ngc --cpus-per-task=4 --mem=48G --time=01:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="nvcr.io#nvidia/pytorch:24.05-py3" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --export=ALL,PIP_NO_CACHE_DIR=1,PIP_DISABLE_PIP_VERSION_CHECK=1,PIP_CACHE_DIR="$ARTROOT/.cache/pip",PYTHONPATH="$DEPS:$WORKDIR/src" --wrap="rm -rf '$DEPS' && mkdir -p '$DEPS' && python -m pip install --target '$DEPS' --upgrade 'numpy==2.2.6' 'scipy==1.15.3' 'pandas==2.3.3' 'scikit-learn==1.7.2' 'accelerate==1.12.0' 'transformers==4.57.3' 'peft==0.18.1' 'datasets==2.21.0' 'huggingface_hub==0.36.0' 'sentencepiece==0.2.1' 'httpx==0.28.1' 'safetensors==0.7.0' 'bitsandbytes>=0.43.0' 'sae-lens>=6.7.0' && PYTHONPATH='$DEPS:$WORKDIR/src' python -c 'import torch, numpy, pandas, sklearn, transformers, peft, datasets, sae_lens, aisafety; print(\"torch\", torch.__version__, torch.__file__); print(\"numpy\", numpy.__version__, numpy.__file__); print(\"sae_lens ok\"); print(\"aisafety ok\")'"
+```
+
+Keep Slurm logs under DSS:
+
+```bash
+mkdir -p "$ARTROOT/slurm_logs"
+```
+
+LRZ references:
+
+- AI Systems compute partitions and GPU memory:
+  `https://doku.lrz.de/1-general-description-and-resources-10746641.html`
+- Enroot introduction and login-node limitation:
+  `https://doku.lrz.de/4-1-enroot-introduction-1895502566.html`
+- Interactive Slurm jobs, `lrz-cpu --qos=cpu`, and Pyxis examples:
+  `https://doku.lrz.de/6-running-applications-as-interactive-jobs-on-the-lrz-ai-systems-10746640.html`
+- Single-GPU batch jobs and Pyxis batch guidance:
+  `https://doku.lrz.de/5-2-slurm-batch-jobs-single-gpu-1898974516.html`
 
 ## Repository Layout
 
@@ -98,7 +174,80 @@ D4 SAE feature analysis:
 python -m aisafety.scripts.run_d4_sae_feature_analysis --help
 ```
 
-## Immediate LRZ Commands
+Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
+when only imports from this repo are needed.
+
+## LRZ Preflight
+
+Do not start with full SAE over every adapter. First verify paths and container
+execution.
+
+Static artifact discovery from the login node:
+
+```bash
+find "$HOME" /dss/dssfs04 -name value_head.pt -o -name adapter_model.safetensors -o -path "*/d4_dataset_pack_v1/manifest.json" 2>/dev/null
+```
+
+Static check of the current DSS artifact root:
+
+```bash
+cd "$WORKDIR" && test -f "$ARTROOT/data/derived/d4_dataset_pack_v1/manifest.json" && test -f "$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact/value_head.pt" && echo OK
+```
+
+CPU Slurm jobs:
+
+- Use `--partition=lrz-cpu --qos=cpu`.
+- Use CPU jobs for filesystem, manifest, and non-Torch checks.
+- Do not assume CPU jobs can validate CUDA or V100/A100/H100 runtime behavior.
+- If Pyxis container submission fails on `lrz-cpu`, use CPU for non-container
+  static checks only and run the shortest possible GPU container smoke test.
+
+CPU static manifest check, no container:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-static --cpus-per-task=2 --mem=4G --time=00:10:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src" --wrap="python - <<'PY'
+from pathlib import Path
+import json
+root = Path('$ARTROOT')
+manifest = root / 'data/derived/d4_dataset_pack_v1/manifest.json'
+print('manifest', manifest, manifest.exists())
+if manifest.exists():
+    payload = json.load(open(manifest))
+    print('d4_atoms', len(payload.get('d4_atoms', [])))
+    for key, value in sorted((payload.get('outputs') or {}).items()):
+        if value is None:
+            print(key, 'None')
+            continue
+        path = Path(value)
+        if not path.is_absolute():
+            path = root / path
+        print(key, path.exists(), path)
+PY"
+```
+
+GPU container smoke test:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --job-name=container-smoke --gres=gpu:1 --cpus-per-task=2 --mem=16G --time=00:10:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE --export=ALL,PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -c 'import torch, transformers, sae_lens, aisafety; print(\"torch\", torch.__version__, \"cuda\", torch.cuda.is_available()); print(\"sae_lens import ok\"); print(\"aisafety import ok\")'"
+```
+
+## Immediate LRZ SAE Command
+
+The current high-value next run is J0 late-layer SAE localization. It is
+queue-friendlier than a full all-adapter sweep and directly tests whether
+high-signal J0 atom features localize in sparse feature space.
+
+Queue J0 late-layer pass:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --job-name=sae-j0-late --gres=gpu:1 --cpus-per-task=6 --mem=48G --time=06:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE --export=ALL,PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -m aisafety.scripts.run_d4_sae_feature_analysis --workspace-root '$WORKDIR' --manifest-json '$ARTROOT/data/derived/d4_dataset_pack_v1/manifest.json' --reward-run-dir '$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact' --selected-layers 39,40,41,42 --aggregation max --content-max-pairs 500 --use-4bit --batch-size 1 --sae-token-chunk-size 256 --out-dir '$ARTROOT/artifacts/mechanistic/d4_j0_sae_late_v1'"
+```
+
+Interpret this run before queueing every adapter. If the J0 late run produces
+stable atom features, queue `Jrepair-all` next. Queue one LOO condition only
+after J0 and Jrepair-all show interpretable feature movement.
+
+## Deferred LRZ Commands
 
 Recover the fixed content-anchor utility control:
 
@@ -247,4 +396,3 @@ When a new source affects project direction or paper claims:
 8. Do not claim utility independence until content-anchor controls are valid.
 9. Keep execution guidance LRZ-centered.
 10. Keep live planning out of `docs/`.
-
