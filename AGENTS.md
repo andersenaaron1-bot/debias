@@ -88,6 +88,9 @@ Use `sae-mech-v1` for SAE work. The image is intentionally headless and should
 not import `torchvision`; the SAE/text stack does not need it, and optional
 vision imports have caused `torchvision::nms` binary-registration failures on
 LRZ.
+The image must also keep the base `torch==2.4.1` CUDA 12.1 stack. If a smoke
+test reports CUDA 13 or `torch 2.11`, pip upgraded Torch during the image build;
+rebuild with `requirements/torch-cu121-constraints.txt`.
 
 If GHCR import fails, the image may be private or credentials may be missing.
 Resolve the container import first; do not fall back to system Python for model
