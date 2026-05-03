@@ -93,6 +93,9 @@ The image must keep a driver-compatible Torch stack. Current SAE builds use
 `requirements/sae-container-constraints.txt`. If a smoke test reports CUDA 13
 or `torch 2.11`, pip upgraded Torch during the image build; rebuild with the
 SAE container constraints.
+Use an official GPU-enabled PyTorch or NGC base image. A plain `python:slim`
+base can expose `/dev/nvidia*` but still leave PyTorch with zero CUDA devices
+inside Pyxis.
 
 If GHCR import fails, the image may be private or credentials may be missing.
 Resolve the container import first; do not fall back to system Python for model

@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM pytorch/pytorch:2.6.0-cuda11.8-cudnn9-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
@@ -24,7 +24,6 @@ COPY src /workspace/src
 COPY configs /workspace/configs
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
-    python -m pip install --index-url https://download.pytorch.org/whl/cu118 torch==2.6.0 && \
     python -m pip install --constraint /tmp/sae-container-constraints.txt -r /tmp/requirements-cluster.txt && \
     python -m pip install --constraint /tmp/sae-container-constraints.txt ".[mech]" && \
     (python -m pip uninstall -y torchvision || true) && \
