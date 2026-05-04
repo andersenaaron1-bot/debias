@@ -5,13 +5,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/cache/huggingface \
     TRANSFORMERS_CACHE=/cache/huggingface/transformers \
-    HF_DATASETS_CACHE=/cache/huggingface/datasets
+    HF_DATASETS_CACHE=/cache/huggingface/datasets \
+    CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++
 
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     git-lfs \
+    gcc \
+    g++ \
+    make \
     libglib2.0-0 \
     libgomp1 \
     ca-certificates \

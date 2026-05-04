@@ -96,6 +96,9 @@ SAE container constraints.
 Use an official GPU-enabled PyTorch or NGC base image. A plain `python:slim`
 base can expose `/dev/nvidia*` but still leave PyTorch with zero CUDA devices
 inside Pyxis.
+Keep `gcc`, `g++`, and `make` in the runtime image. Triton may JIT small CUDA
+launch modules during model loading or bitsandbytes setup; without a compiler,
+SAE runs fail with `Failed to find C compiler`.
 
 If GHCR import fails, the image may be private or credentials may be missing.
 Resolve the container import first; do not fall back to system Python for model
