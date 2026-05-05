@@ -268,6 +268,10 @@ cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-h
 
 Set `REQUIRE_DATASETS=hc3,hc3_plus,h_llmc2` on this job when the goal is to
 fail fast if HC3+, HC3, or H-LLMC2 are absent from the normalized corpus.
+For the broad confirmation pass, use `CAP_STRATEGY=dataset_subset`,
+`MAX_PAIRS_PER_DATASET=0`, and `MAX_TOTAL_PAIRS=10000` to sample by
+deterministic round-robin across dataset/subset strata instead of letting a
+large subcategory dominate.
 
 Queue the broad targeted candidate alignment pass:
 

@@ -20,7 +20,9 @@ INCLUDE_ROLES="${INCLUDE_ROLES:-discovery_core,controlled_confirmation,heldout_t
 INCLUDE_DATASETS="${INCLUDE_DATASETS:-}"
 EXCLUDE_DATASETS="${EXCLUDE_DATASETS:-}"
 REQUIRE_DATASETS="${REQUIRE_DATASETS:-}"
+CAP_STRATEGY="${CAP_STRATEGY:-dataset}"
 MAX_PAIRS_PER_DATASET="${MAX_PAIRS_PER_DATASET:-5000}"
+MAX_TOTAL_PAIRS="${MAX_TOTAL_PAIRS:-0}"
 MAX_LLM_PER_GROUP="${MAX_LLM_PER_GROUP:-2}"
 MIN_TOKENS="${MIN_TOKENS:-20}"
 MAX_TOKENS="${MAX_TOKENS:-900}"
@@ -37,7 +39,9 @@ python -m aisafety.scripts.build_d4_human_llm_alignment_pairs \
   --include-datasets "$INCLUDE_DATASETS" \
   --exclude-datasets "$EXCLUDE_DATASETS" \
   --require-datasets "$REQUIRE_DATASETS" \
+  --cap-strategy "$CAP_STRATEGY" \
   --max-pairs-per-dataset "$MAX_PAIRS_PER_DATASET" \
+  --max-total-pairs "$MAX_TOTAL_PAIRS" \
   --max-llm-per-group "$MAX_LLM_PER_GROUP" \
   --min-tokens "$MIN_TOKENS" \
   --max-tokens "$MAX_TOKENS" \

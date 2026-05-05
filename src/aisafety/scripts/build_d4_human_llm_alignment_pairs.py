@@ -72,10 +72,29 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-human-per-group", type=int, default=1)
     parser.add_argument("--max-llm-per-group", type=int, default=2)
     parser.add_argument(
+        "--cap-strategy",
+        choices=["dataset", "dataset_subset"],
+        default="dataset",
+        help="Stratum used for deterministic capping.",
+    )
+    parser.add_argument(
         "--max-pairs-per-dataset",
         type=int,
         default=5000,
-        help="Deterministic cap after all group-level pairs are built. 0 disables the cap.",
+        help=(
+            "Legacy deterministic cap after all group-level pairs are built. "
+            "For cap-strategy=dataset_subset this caps each dataset/subset stratum. "
+            "0 disables this cap."
+        ),
+    )
+    parser.add_argument(
+        "--max-total-pairs",
+        type=int,
+        default=0,
+        help=(
+            "Optional global cap. When set, pairs are selected by deterministic "
+            "round-robin over the selected cap-strategy strata."
+        ),
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     return parser.parse_args()
@@ -163,6 +182,86 @@ def _selected_rows(
     return subset[: int(limit)]
 
 
+def _cap_key(pair: dict[str, Any], *, strategy: str) -> tuple[str, ...]:
+    if str(strategy) == "dataset_subset":
+        return (
+            str(pair.get("source_dataset") or ""),
+            str(pair.get("subset") or pair.get("item_type") or ""),
+        )
+    return (str(pair.get("source_dataset") or ""),)
+
+
+def _stable_pair_sort(
+    pairs: list[dict[str, Any]],
+    *,
+    seed: int,
+    salt: str,
+) -> list[dict[str, Any]]:
+    return sorted(
+        pairs,
+        key=lambda pair: sha1_hex(
+            f"{seed}:{salt}:{pair.get('source_dataset')}:{pair.get('subset')}:{pair.get('pair_id')}"
+        ),
+    )
+
+
+def _cap_pairs(
+    pairs: list[dict[str, Any]],
+    *,
+    cap_strategy: str,
+    max_pairs_per_dataset: int,
+    max_total_pairs: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Deterministically cap pairs, optionally balancing across strata."""
+
+    if not pairs:
+        return []
+
+    capped = list(pairs)
+    if int(max_pairs_per_dataset) > 0:
+        by_key: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+        for pair in capped:
+            by_key[_cap_key(pair, strategy=cap_strategy)].append(pair)
+        limited: list[dict[str, Any]] = []
+        for key, key_pairs in by_key.items():
+            limited.extend(
+                _stable_pair_sort(
+                    key_pairs,
+                    seed=seed,
+                    salt="pair-cap:" + "::".join(key),
+                )[: int(max_pairs_per_dataset)]
+            )
+        capped = limited
+
+    if int(max_total_pairs) > 0 and len(capped) > int(max_total_pairs):
+        by_key = defaultdict(list)
+        for pair in capped:
+            by_key[_cap_key(pair, strategy=cap_strategy)].append(pair)
+        queues = {
+            key: _stable_pair_sort(key_pairs, seed=seed, salt="total-cap:" + "::".join(key))
+            for key, key_pairs in by_key.items()
+        }
+        ordered_keys = sorted(queues, key=lambda key: sha1_hex(f"{seed}:stratum-order:{'::'.join(key)}"))
+        selected: list[dict[str, Any]] = []
+        cursor = 0
+        while len(selected) < int(max_total_pairs) and any(queues.values()):
+            key = ordered_keys[cursor % len(ordered_keys)]
+            cursor += 1
+            if queues[key]:
+                selected.append(queues[key].pop(0))
+        capped = selected
+
+    return sorted(
+        capped,
+        key=lambda pair: (
+            str(pair.get("source_dataset") or ""),
+            str(pair.get("subset") or ""),
+            str(pair.get("pair_id") or ""),
+        ),
+    )
+
+
 def build_pairs_from_records(
     rows: list[dict[str, Any]],
     *,
@@ -173,7 +272,9 @@ def build_pairs_from_records(
     max_tokens: int,
     max_human_per_group: int,
     max_llm_per_group: int,
+    cap_strategy: str,
     max_pairs_per_dataset: int,
+    max_total_pairs: int,
     seed: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return deterministic human/LLM pairs and a summary payload."""
@@ -261,26 +362,32 @@ def build_pairs_from_records(
                 }
                 pairs.append(pair)
 
-    if int(max_pairs_per_dataset) > 0:
-        limited: list[dict[str, Any]] = []
-        by_dataset: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for pair in pairs:
-            by_dataset[str(pair["source_dataset"])].append(pair)
-        for dataset_id, dataset_pairs in by_dataset.items():
-            dataset_pairs.sort(
-                key=lambda pair: sha1_hex(f"{seed}:pair-cap:{dataset_id}:{pair['pair_id']}")
-            )
-            limited.extend(dataset_pairs[: int(max_pairs_per_dataset)])
-        pairs = sorted(limited, key=lambda pair: (str(pair["source_dataset"]), str(pair["pair_id"])))
-    else:
-        pairs = sorted(pairs, key=lambda pair: (str(pair["source_dataset"]), str(pair["pair_id"])))
+    uncapped_count = len(pairs)
+    pairs = _cap_pairs(
+        pairs,
+        cap_strategy=str(cap_strategy),
+        max_pairs_per_dataset=int(max_pairs_per_dataset),
+        max_total_pairs=int(max_total_pairs),
+        seed=int(seed),
+    )
 
     summary = {
         "n_input_rows": int(len(rows)),
         "n_pairs": int(len(pairs)),
+        "n_uncapped_pairs": int(uncapped_count),
         "n_groups_considered": int(len(grouped)),
+        "cap_strategy": str(cap_strategy),
+        "max_pairs_per_dataset": int(max_pairs_per_dataset),
+        "max_total_pairs": int(max_total_pairs),
         "skipped": dict(skipped),
         "by_dataset": dict(Counter(str(pair["source_dataset"]) for pair in pairs)),
+        "by_dataset_subset": {
+            f"{dataset}::{subset}": int(count)
+            for (dataset, subset), count in Counter(
+                (str(pair["source_dataset"]), str(pair.get("subset") or pair.get("item_type") or ""))
+                for pair in pairs
+            ).items()
+        },
         "by_role": dict(Counter(str(pair["bundle_creation_role"]) for pair in pairs)),
         "by_item_type": dict(Counter(str(pair["item_type"]) for pair in pairs)),
         "by_split": dict(Counter(str(pair["split"]) for pair in pairs)),
@@ -305,7 +412,9 @@ def main() -> None:
         max_tokens=int(args.max_tokens),
         max_human_per_group=int(args.max_human_per_group),
         max_llm_per_group=int(args.max_llm_per_group),
+        cap_strategy=str(args.cap_strategy),
         max_pairs_per_dataset=int(args.max_pairs_per_dataset),
+        max_total_pairs=int(args.max_total_pairs),
         seed=int(args.seed),
     )
     if not pairs:
@@ -326,7 +435,9 @@ def main() -> None:
         "max_tokens": int(args.max_tokens),
         "max_human_per_group": int(args.max_human_per_group),
         "max_llm_per_group": int(args.max_llm_per_group),
+        "cap_strategy": str(args.cap_strategy),
         "max_pairs_per_dataset": int(args.max_pairs_per_dataset),
+        "max_total_pairs": int(args.max_total_pairs),
         **summary,
     }
     required_datasets = _csv_set(str(args.require_datasets))
