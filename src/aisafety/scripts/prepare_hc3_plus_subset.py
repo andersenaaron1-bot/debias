@@ -1,8 +1,9 @@
 """Normalize an HC3 Plus checkout/archive into paired bundle-corpus JSONL.
 
 The official HC3 Plus repository stores detector-style JSONL files. This script
-extracts paired human/ChatGPT rows where possible and writes the normalized
-schema expected by ``build_bundle_creation_corpus --hc3-plus-jsonl``.
+extracts paired human/ChatGPT rows where possible and writes normalized records
+that can be appended to the bundle-creation corpus before building D4
+human-vs-LLM alignment pairs.
 """
 
 from __future__ import annotations
@@ -65,8 +66,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--file-glob",
         type=str,
-        default="*hc3_si*.jsonl",
-        help="Glob applied below data/<language>. Use train.jsonl explicitly only after schema inspection.",
+        default="*.jsonl",
+        help="Glob applied below data/<language>; keep this broad to retain HC3+ QA/SI/train strata.",
     )
     parser.add_argument("--max-pairs", type=int, default=2000)
     parser.add_argument("--min-tokens", type=int, default=20)
@@ -155,7 +156,7 @@ def _row_subset(row: dict[str, Any], *, path: Path) -> str:
         return "translation"
     if "para" in stem:
         return "paraphrasing"
-    return "hc3_si"
+    return stem
 
 
 def _row_group_value(row: dict[str, Any]) -> str:
@@ -298,6 +299,72 @@ def _classifier_row_records(
     return out
 
 
+def _pick_run_item(items: list[tuple[int, str]], *, seed: int, source: str) -> tuple[int, str]:
+    return sorted(items, key=lambda item: sha1_hex(f"{seed}:{source}:{item[0]}:{item[1][:120]}"))[0]
+
+
+def _sequential_label_records(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    human_labels: set[str],
+    llm_labels: set[str],
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Pair adjacent detector-label runs when HC3+ omits prompt/group fields."""
+
+    runs: list[tuple[str, list[tuple[int, str]], str]] = []
+    current_source: str | None = None
+    current_subset = ""
+    current_items: list[tuple[int, str]] = []
+    for row_idx, row in enumerate(rows):
+        source = _row_source(row, human_labels=human_labels, llm_labels=llm_labels)
+        text = _row_text(row)
+        if source is None or not text:
+            continue
+        subset = _row_subset(row, path=path)
+        if source != current_source and current_items:
+            runs.append((str(current_source), current_items, current_subset))
+            current_items = []
+        current_source = source
+        current_subset = subset
+        current_items.append((row_idx, text))
+    if current_items and current_source is not None:
+        runs.append((current_source, current_items, current_subset))
+
+    out: list[dict[str, Any]] = []
+    idx = 0
+    while idx < len(runs) - 1:
+        left_source, left_items, left_subset = runs[idx]
+        right_source, right_items, right_subset = runs[idx + 1]
+        if left_source == right_source:
+            idx += 1
+            continue
+        left_idx, left_text = _pick_run_item(left_items, seed=seed, source=left_source)
+        right_idx, right_text = _pick_run_item(right_items, seed=seed, source=right_source)
+        if left_source == "human":
+            human_idx, human_text = left_idx, left_text
+            llm_text = right_text
+        else:
+            human_idx, human_text = right_idx, right_text
+            llm_text = left_text
+        subset = left_subset if left_subset == right_subset else f"{left_subset}+{right_subset}"
+        group_value = f"{path.stem}:{min(left_idx, right_idx)}:{max(left_idx, right_idx)}"
+        out.extend(
+            _emit_pair_records(
+                human_text=human_text,
+                llm_text=llm_text,
+                group_value=group_value,
+                subset=subset,
+                path=path,
+                row_idx=human_idx,
+                seed=seed,
+            )
+        )
+        idx += 2
+    return out
+
+
 def _dedup_and_cap(records: list[dict[str, Any]], *, max_pairs: int, min_tokens: int, max_tokens: int, seed: int):
     by_group: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in records:
@@ -352,6 +419,14 @@ def main() -> None:
         paired = _paired_field_records(path, rows, seed=int(args.seed))
         if not paired:
             paired = _classifier_row_records(
+                path,
+                rows,
+                human_labels=human_labels,
+                llm_labels=llm_labels,
+                seed=int(args.seed),
+            )
+        if not paired:
+            paired = _sequential_label_records(
                 path,
                 rows,
                 human_labels=human_labels,
