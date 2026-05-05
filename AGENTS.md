@@ -192,6 +192,7 @@ D4 broad human-vs-LLM candidate alignment:
 ```bash
 python -m aisafety.scripts.build_d4_human_llm_alignment_pairs --help
 python -m aisafety.scripts.run_d4_candidate_feature_pair_alignment --help
+python -m aisafety.scripts.inspect_d4_candidate_alignment --help
 ```
 
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
@@ -276,6 +277,18 @@ cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" &
 
 Use `MAX_PAIRS=0` only after the capped run has completed and the output
 manifest confirms stable pair counts and nonempty alignment rows.
+
+Package and summarize the completed broad alignment run on LRZ:
+
+```bash
+cd "$WORKDIR" && python -m aisafety.scripts.inspect_d4_candidate_alignment --input "$ARTROOT/artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1" --archive --no-print
+```
+
+After downloading the archive locally, extract and inspect with the same script:
+
+```bash
+python -m aisafety.scripts.inspect_d4_candidate_alignment --input artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1.tar.gz --extract-to artifacts/mechanistic --top-k 40 --source-top-k 40
+```
 
 ## Deferred LRZ Commands
 
