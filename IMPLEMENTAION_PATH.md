@@ -17,9 +17,10 @@ adapter grid. It is a stricter mechanistic pipeline:
 
 1. recover atom signals in the reward judge residual stream
 2. localize atom-aligned sparse features
-3. assemble atom features into bundle hypotheses
-4. test whether bundle-level feature sets align with judge choices
-5. only then run causal damping, ablation, or steering tests
+3. freeze a broad candidate feature registry
+4. test candidate features on broad human-vs-LLM alignment corpora
+5. assemble atom features into bundle hypotheses
+6. only then run causal damping, ablation, or steering tests
 
 The earlier failed run is treated as a recovery target, not as evidence. Any
 utility-control result from the invalid split is retired.
@@ -330,6 +331,45 @@ Interpretation:
 - A candidate surface-cue feature needs weak or controlled utility overlap plus
   falsification against close negatives.
 
+### Stage 2B: Broad Human-vs-LLM Candidate Alignment
+
+Goal:
+
+- freeze a broad candidate feature registry from merged SAE discovery outputs
+- build paired human-vs-LLM corpora from HC3, HC+, H-LLMC2, HAP-E, and local
+  controlled-confirmation records when available
+- score each human/LLM pair with J0
+- test whether candidate feature activation deltas predict J0
+  LLM-minus-human reward margins
+- estimate source/domain stability and matched random-control baselines
+
+Current implementation:
+
+- `src/aisafety/scripts/build_d4_human_llm_alignment_pairs.py`
+- `src/aisafety/scripts/run_d4_candidate_feature_pair_alignment.py`
+
+Outputs:
+
+- `data/derived/d4_human_llm_alignment_pairs_v1/pairs.jsonl`
+- `data/derived/d4_human_llm_alignment_pairs_v1/summary.json`
+- `candidate_feature_registry.csv`
+- `pair_scores.csv`
+- `candidate_feature_human_llm_alignment.csv`
+- `candidate_feature_source_alignment.csv`
+- `candidate_feature_examples.json`
+- `alignment_manifest.json`
+
+Interpretation:
+
+- Laurito-only decision alignment is a screening signal, not confirmation.
+- Broad alignment supports a claim that a feature is associated with
+  human-vs-LLM judge preference across sources.
+- The strongest candidates are features that are atom-interpretable, separate
+  LLM from human text, align with J0 reward margins after length/source
+  controls, and outperform matched random features.
+- This still does not establish causality. It only selects candidates for
+  counterfactual rewriting and feature intervention.
+
 ### Stage 3: Feature Explanation And Falsification
 
 Goal:
@@ -626,4 +666,3 @@ artifacts alone:
 - Which bundle candidates survived feature-card falsification?
 - Which causal intervention, if any, changed judge behavior relative to matched
   controls?
-

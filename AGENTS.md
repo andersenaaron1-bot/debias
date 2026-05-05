@@ -20,17 +20,19 @@ maintenance practice, update this file.
 
 The active work is the D4 mechanistic tracing refactor:
 
-1. recover the failed content-anchor utility-control run with a valid
+1. maintain the recovered content-anchor utility-control path with a valid
    deterministic pair-level split
-2. complete the J0 SAE feature-localization pass
-3. inspect and falsify top atom features
-4. build atom-to-bundle feature graphs
-5. run diagnostic cross-model contrasts only after stable J0 candidates exist
-6. reserve causal claims for intervention tests
+2. maintain the J0 SAE feature-localization and merged candidate registry
+3. run broad human-vs-LLM candidate-feature alignment on HC3/HC+/H-LLMC2/HAP-E
+   style pair corpora before intervention claims
+4. inspect and falsify top atom and bundle features with close negatives
+5. build atom-to-bundle feature graphs from stable candidates
+6. run diagnostic cross-model contrasts only after stable J0 candidates exist
+7. reserve causal claims for intervention tests
 
 Do not train a broad new adapter grid. Do not define the ontology from repair
 ablations. Do not make utility-independence or causal claims until the required
-controls and interventions exist.
+controls, broad human-vs-LLM alignment checks, and interventions exist.
 
 ## LRZ-Only Execution
 
@@ -185,6 +187,13 @@ D4 SAE feature analysis:
 python -m aisafety.scripts.run_d4_sae_feature_analysis --help
 ```
 
+D4 broad human-vs-LLM candidate alignment:
+
+```bash
+python -m aisafety.scripts.build_d4_human_llm_alignment_pairs --help
+python -m aisafety.scripts.run_d4_candidate_feature_pair_alignment --help
+```
+
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
 when only imports from this repo are needed.
 
@@ -242,21 +251,31 @@ GPU container smoke test:
 cd "$WORKDIR" && sbatch --parsable --job-name=container-smoke --gres=gpu:1 --cpus-per-task=2 --mem=16G --time=00:10:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE --export=ALL,PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -c 'import torch, transformers, sae_lens, aisafety; print(\"torch\", torch.__version__, \"cuda\", torch.cuda.is_available()); print(\"sae_lens import ok\"); print(\"aisafety import ok\")'"
 ```
 
-## Immediate LRZ SAE Command
+## Immediate LRZ Human-vs-LLM Alignment Commands
 
-The current high-value next run is J0 late-layer SAE localization. It is
-queue-friendlier than a full all-adapter sweep and directly tests whether
-high-signal J0 atom features localize in sparse feature space.
+The current high-value next run is broad J0 candidate-feature alignment on
+human-vs-LLM pairs. This is not another feature-discovery sweep. It freezes a
+broad candidate registry from the merged SAE discovery outputs, scores
+human/LLM pairs with J0, and tests whether activation deltas predict J0
+LLM-minus-human reward margins after length/source controls.
 
-Queue J0 late-layer pass:
+Build human-vs-LLM alignment pairs from the normalized bundle-creation corpus:
 
 ```bash
-cd "$WORKDIR" && sbatch --parsable --job-name=sae-j0-late --gres=gpu:1 --cpus-per-task=6 --mem=48G --time=06:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE --export=ALL,PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -m aisafety.scripts.run_d4_sae_feature_analysis --workspace-root '$WORKDIR' --manifest-json '$ARTROOT/data/derived/d4_dataset_pack_v1/manifest.json' --reward-run-dir '$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact' --selected-layers 39,40,41,42 --aggregation max --content-max-pairs 500 --use-4bit --batch-size 1 --sae-token-chunk-size 256 --out-dir '$ARTROOT/artifacts/mechanistic/d4_j0_sae_late_v1'"
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RECORDS_JSONL="$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_v1",MAX_PAIRS_PER_DATASET=5000,MAX_LLM_PER_GROUP=2 cluster/lrz/d4_human_llm_alignment_pairs.sbatch
 ```
 
-Interpret this run before queueing every adapter. If the J0 late run produces
-stable atom features, queue `Jrepair-all` next. Queue one LOO condition only
-after J0 and Jrepair-all show interpretable feature movement.
+Set `REQUIRE_DATASETS=hc3,hc3_plus,h_llmc2` on this job when the goal is to
+fail fast if HC3+, HC3, or H-LLMC2 are absent from the normalized corpus.
+
+Queue the broad targeted candidate alignment pass:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-hllm-align --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=10:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_v1/pairs.jsonl",CANDIDATE_SOURCE_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1",MAX_PAIRS=6000,MAX_CANDIDATES=900,MAX_FEATURES_PER_LAYER=90,RANDOM_CONTROLS_PER_LAYER=10,SOURCE_MIN_PAIRS=25,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512 cluster/lrz/d4_candidate_feature_pair_alignment.sbatch
+```
+
+Use `MAX_PAIRS=0` only after the capped run has completed and the output
+manifest confirms stable pair counts and nonempty alignment rows.
 
 ## Deferred LRZ Commands
 
@@ -329,6 +348,12 @@ SAE localization supports:
 - sparse features align with pair-side judge decisions
 - sparse features have measured utility overlap
 
+Broad human-vs-LLM candidate alignment supports:
+
+- frozen candidate features distinguish human from LLM text in paired corpora
+- activation deltas align with J0 LLM-minus-human reward margins beyond Laurito
+- source/domain stability and matched random-control comparisons are measured
+
 Feature-card inspection supports:
 
 - a feature is an interpretable candidate cue feature after top examples and
@@ -378,6 +403,9 @@ Use explicit stage, judge, and purpose names:
 - `artifacts/mechanistic/d4_j0_atom_recovery_v1_resplit`
 - `artifacts/mechanistic/d4_j0_sae_feature_analysis_scout`
 - `artifacts/mechanistic/d4_j0_sae_feature_analysis_v1`
+- `artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1`
+- `data/derived/d4_human_llm_alignment_pairs_v1`
+- `artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1`
 - `artifacts/mechanistic/d4_j0_bundle_graph_v1`
 - `artifacts/mechanistic/d4_j0_intervention_scout_v1`
 
