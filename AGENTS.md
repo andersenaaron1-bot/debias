@@ -265,11 +265,13 @@ Use `EXTRA_RECORDS_JSONL` for staged supplements such as HC3+ instead of
 shell-concatenating files before submission:
 
 ```bash
-cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RECORDS_JSONL="$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl",EXTRA_RECORDS_JSONL="$ARTROOT/data/external/bundle_creation_v1/hc3_plus_subset.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v2",INCLUDE_DATASETS="hc3,hc3_plus,h_llmc2,hape",REQUIRE_DATASETS="hc3,hc3_plus,h_llmc2,hape",CAP_STRATEGY=dataset_subset,MAX_PAIRS_PER_DATASET=0,MAX_TOTAL_PAIRS=10000,MAX_LLM_PER_GROUP=1 cluster/lrz/d4_human_llm_alignment_pairs.sbatch
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RECORDS_JSONL="$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl",EXTRA_RECORDS_JSONL="$ARTROOT/data/external/bundle_creation_v1/hc3_plus_subset.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v2",INCLUDE_DATASETS=hc3:hc3_plus:h_llmc2:hape,REQUIRE_DATASETS=hc3:hc3_plus:h_llmc2:hape,CAP_STRATEGY=dataset_subset,MAX_PAIRS_PER_DATASET=0,MAX_TOTAL_PAIRS=10000,MAX_LLM_PER_GROUP=1 cluster/lrz/d4_human_llm_alignment_pairs.sbatch
 ```
 
-Set `REQUIRE_DATASETS=hc3,hc3_plus,h_llmc2,hape` on broad confirmation jobs to
-fail fast if any required source is absent from the emitted pair file.
+Set `REQUIRE_DATASETS=hc3:hc3_plus:h_llmc2:hape` on broad confirmation jobs to
+fail fast if any required source is absent from the emitted pair file. Use
+colon-separated lists in Slurm `--export`; commas are parsed by Slurm as
+variable separators.
 For the broad confirmation pass, use `CAP_STRATEGY=dataset_subset`,
 `MAX_PAIRS_PER_DATASET=0`, and `MAX_TOTAL_PAIRS=10000` to sample by
 deterministic round-robin across dataset/subset strata instead of letting a

@@ -5,11 +5,15 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from aisafety.scripts.build_d4_human_llm_alignment_pairs import build_pairs_from_records
+from aisafety.scripts.build_d4_human_llm_alignment_pairs import _csv_set, build_pairs_from_records
 from aisafety.scripts.run_d4_candidate_feature_pair_alignment import build_candidate_registry
 
 
 class D4HumanLlmAlignmentTest(unittest.TestCase):
+    def test_list_parser_accepts_slurm_safe_colons(self) -> None:
+        self.assertEqual(_csv_set("hc3:hc3_plus:h_llmc2:hape"), {"hc3", "hc3_plus", "h_llmc2", "hape"})
+        self.assertEqual(_csv_set("discovery_core,controlled_confirmation"), {"discovery_core", "controlled_confirmation"})
+
     def test_pair_builder_groups_human_and_llm_records(self) -> None:
         rows = [
             {

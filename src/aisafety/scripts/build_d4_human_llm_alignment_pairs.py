@@ -13,6 +13,7 @@ import argparse
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from aisafety.config import DATA_DIR, DEFAULT_SEED, PROJECT_ROOT
@@ -108,7 +109,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _csv_set(value: str) -> set[str]:
-    return {part.strip() for part in str(value or "").split(",") if part.strip()}
+    return {part.strip() for part in re.split(r"[,;:\s]+", str(value or "")) if part.strip()}
 
 
 def _resolve_path(base: Path, value: Path) -> Path:
