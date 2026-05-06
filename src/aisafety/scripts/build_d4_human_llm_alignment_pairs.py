@@ -35,7 +35,14 @@ def _parse_args() -> argparse.Namespace:
         "--records-jsonl",
         type=Path,
         default=DATA_DIR / "derived" / "bundle_creation_corpus_v1" / "all_records.jsonl",
-        help="Normalized bundle-creation records with source=human/llm and group_id.",
+        help="Primary normalized bundle-creation records with source=human/llm and group_id.",
+    )
+    parser.add_argument(
+        "--extra-records-jsonl",
+        type=Path,
+        action="append",
+        default=[],
+        help="Additional normalized record JSONL files to append before filtering. May be passed multiple times.",
     )
     parser.add_argument("--workspace-root", type=Path, default=PROJECT_ROOT)
     parser.add_argument(
@@ -124,6 +131,19 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _read_record_inputs(workspace_root: Path, paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    inputs: list[dict[str, Any]] = []
+    for raw_path in paths:
+        path = _resolve_path(workspace_root, raw_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Record JSONL not found: {path}")
+        file_rows = _read_jsonl(path)
+        rows.extend(file_rows)
+        inputs.append({"path": str(path), "n_rows": int(len(file_rows))})
+    return rows, inputs
+
+
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -152,6 +172,34 @@ def _dataset_id(row: dict[str, Any]) -> str:
 def _role(row: dict[str, Any]) -> str:
     meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
     return str(meta.get("bundle_creation_role") or row.get("role") or "unknown")
+
+
+def _input_inventory(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_dataset_source = Counter()
+    by_dataset_role = Counter()
+    by_dataset_subset_source = Counter()
+    for row in rows:
+        dataset_id = _dataset_id(row)
+        source = str(row.get("source") or "").lower()
+        role = _role(row)
+        subset = str(row.get("subset") or row.get("item_type") or "")
+        by_dataset_source[(dataset_id, source)] += 1
+        by_dataset_role[(dataset_id, role)] += 1
+        by_dataset_subset_source[(dataset_id, subset, source)] += 1
+    return {
+        "by_dataset_source": {
+            f"{dataset}::{source}": int(count)
+            for (dataset, source), count in sorted(by_dataset_source.items())
+        },
+        "by_dataset_role": {
+            f"{dataset}::{role}": int(count)
+            for (dataset, role), count in sorted(by_dataset_role.items())
+        },
+        "by_dataset_subset_source": {
+            f"{dataset}::{subset}::{source}": int(count)
+            for (dataset, subset, source), count in sorted(by_dataset_subset_source.items())
+        },
+    }
 
 
 def _row_sort_key(row: dict[str, Any], *, seed: int, salt: str) -> str:
@@ -281,6 +329,7 @@ def build_pairs_from_records(
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     skipped = Counter()
+    filtered_inventory_rows: list[dict[str, Any]] = []
 
     for row in rows:
         dataset_id = _dataset_id(row)
@@ -309,8 +358,10 @@ def build_pairs_from_records(
         row = dict(row)
         row["text"] = text
         grouped[(dataset_id, group_id)].append(row)
+        filtered_inventory_rows.append(row)
 
     pairs: list[dict[str, Any]] = []
+    unpaired_by_dataset = Counter()
     for (dataset_id, group_id), group_rows in sorted(grouped.items()):
         humans = _selected_rows(
             group_rows,
@@ -326,6 +377,7 @@ def build_pairs_from_records(
         )
         if not humans or not llms:
             skipped["unpaired_group"] += 1
+            unpaired_by_dataset[dataset_id] += 1
             continue
 
         for human in humans:
@@ -363,6 +415,14 @@ def build_pairs_from_records(
                 pairs.append(pair)
 
     uncapped_count = len(pairs)
+    uncapped_by_dataset = dict(Counter(str(pair["source_dataset"]) for pair in pairs))
+    uncapped_by_dataset_subset = {
+        f"{dataset}::{subset}": int(count)
+        for (dataset, subset), count in Counter(
+            (str(pair["source_dataset"]), str(pair.get("subset") or pair.get("item_type") or ""))
+            for pair in pairs
+        ).items()
+    }
     pairs = _cap_pairs(
         pairs,
         cap_strategy=str(cap_strategy),
@@ -380,6 +440,11 @@ def build_pairs_from_records(
         "max_pairs_per_dataset": int(max_pairs_per_dataset),
         "max_total_pairs": int(max_total_pairs),
         "skipped": dict(skipped),
+        "input_inventory": _input_inventory(rows),
+        "post_filter_inventory": _input_inventory(filtered_inventory_rows),
+        "unpaired_groups_by_dataset": dict(unpaired_by_dataset),
+        "uncapped_by_dataset": uncapped_by_dataset,
+        "uncapped_by_dataset_subset": uncapped_by_dataset_subset,
         "by_dataset": dict(Counter(str(pair["source_dataset"]) for pair in pairs)),
         "by_dataset_subset": {
             f"{dataset}::{subset}": int(count)
@@ -398,11 +463,11 @@ def build_pairs_from_records(
 def main() -> None:
     args = _parse_args()
     workspace_root = Path(args.workspace_root).resolve()
-    records_jsonl = _resolve_path(workspace_root, args.records_jsonl)
+    record_paths = [Path(args.records_jsonl), *[Path(path) for path in (args.extra_records_jsonl or [])]]
     out_dir = _resolve_path(workspace_root, args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = _read_jsonl(records_jsonl)
+    rows, record_inputs = _read_record_inputs(workspace_root, record_paths)
     pairs, summary = build_pairs_from_records(
         rows,
         include_roles=_csv_set(str(args.include_roles)),
@@ -424,7 +489,9 @@ def main() -> None:
     summary_path = out_dir / "summary.json"
     _write_jsonl(pair_path, pairs)
     summary_payload = {
-        "records_jsonl": str(records_jsonl),
+        "records_jsonl": str(_resolve_path(workspace_root, args.records_jsonl)),
+        "record_inputs": record_inputs,
+        "extra_records_jsonl": [item["path"] for item in record_inputs[1:]],
         "out_dir": str(out_dir),
         "pair_jsonl": str(pair_path),
         "seed": int(args.seed),
@@ -450,6 +517,8 @@ def main() -> None:
     print(f"pairs={pair_path}")
     print(f"summary={summary_path}")
     print(f"n_pairs={len(pairs)}")
+    print(f"by_dataset={summary['by_dataset']}")
+    print(f"by_dataset_subset={summary['by_dataset_subset']}")
 
 
 if __name__ == "__main__":

@@ -260,14 +260,16 @@ broad candidate registry from the merged SAE discovery outputs, scores
 human/LLM pairs with J0, and tests whether activation deltas predict J0
 LLM-minus-human reward margins after length/source controls.
 
-Build human-vs-LLM alignment pairs from the normalized bundle-creation corpus:
+Build human-vs-LLM alignment pairs from the normalized bundle-creation corpus.
+Use `EXTRA_RECORDS_JSONL` for staged supplements such as HC3+ instead of
+shell-concatenating files before submission:
 
 ```bash
-cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RECORDS_JSONL="$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_v1",MAX_PAIRS_PER_DATASET=5000,MAX_LLM_PER_GROUP=2 cluster/lrz/d4_human_llm_alignment_pairs.sbatch
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RECORDS_JSONL="$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl",EXTRA_RECORDS_JSONL="$ARTROOT/data/external/bundle_creation_v1/hc3_plus_subset.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v2",INCLUDE_DATASETS="hc3,hc3_plus,h_llmc2,hape",REQUIRE_DATASETS="hc3,hc3_plus,h_llmc2,hape",CAP_STRATEGY=dataset_subset,MAX_PAIRS_PER_DATASET=0,MAX_TOTAL_PAIRS=10000,MAX_LLM_PER_GROUP=1 cluster/lrz/d4_human_llm_alignment_pairs.sbatch
 ```
 
-Set `REQUIRE_DATASETS=hc3,hc3_plus,h_llmc2` on this job when the goal is to
-fail fast if HC3+, HC3, or H-LLMC2 are absent from the normalized corpus.
+Set `REQUIRE_DATASETS=hc3,hc3_plus,h_llmc2,hape` on broad confirmation jobs to
+fail fast if any required source is absent from the emitted pair file.
 For the broad confirmation pass, use `CAP_STRATEGY=dataset_subset`,
 `MAX_PAIRS_PER_DATASET=0`, and `MAX_TOTAL_PAIRS=10000` to sample by
 deterministic round-robin across dataset/subset strata instead of letting a
@@ -276,7 +278,7 @@ large subcategory dominate.
 Queue the broad targeted candidate alignment pass:
 
 ```bash
-cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-hllm-align --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=10:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_v1/pairs.jsonl",CANDIDATE_SOURCE_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1",MAX_PAIRS=6000,MAX_CANDIDATES=900,MAX_FEATURES_PER_LAYER=90,RANDOM_CONTROLS_PER_LAYER=10,SOURCE_MIN_PAIRS=25,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512 cluster/lrz/d4_candidate_feature_pair_alignment.sbatch
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-hllm-align --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=10:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v2/pairs.jsonl",CANDIDATE_SOURCE_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_strat10k_v2",MAX_PAIRS=0,MAX_CANDIDATES=900,MAX_FEATURES_PER_LAYER=90,RANDOM_CONTROLS_PER_LAYER=10,SOURCE_MIN_PAIRS=25,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512 cluster/lrz/d4_candidate_feature_pair_alignment.sbatch
 ```
 
 Use `MAX_PAIRS=0` only after the capped run has completed and the output

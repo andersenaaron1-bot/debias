@@ -15,6 +15,7 @@ set -euo pipefail
 WORKDIR="${WORKDIR:-/workspace}"
 ARTROOT="${ARTROOT:-$WORKDIR}"
 RECORDS_JSONL="${RECORDS_JSONL:-$ARTROOT/data/derived/bundle_creation_corpus_v1/all_records.jsonl}"
+EXTRA_RECORDS_JSONL="${EXTRA_RECORDS_JSONL:-}"
 OUT_DIR="${OUT_DIR:-$ARTROOT/data/derived/d4_human_llm_alignment_pairs_v1}"
 INCLUDE_ROLES="${INCLUDE_ROLES:-discovery_core,controlled_confirmation,heldout_transfer}"
 INCLUDE_DATASETS="${INCLUDE_DATASETS:-}"
@@ -31,9 +32,20 @@ SEED="${SEED:-1234}"
 cd "$WORKDIR"
 export PYTHONUNBUFFERED=1
 
+EXTRA_RECORD_ARGS=()
+if [[ -n "$EXTRA_RECORDS_JSONL" ]]; then
+  IFS=',' read -ra EXTRA_RECORD_PATHS <<< "$EXTRA_RECORDS_JSONL"
+  for path in "${EXTRA_RECORD_PATHS[@]}"; do
+    if [[ -n "$path" ]]; then
+      EXTRA_RECORD_ARGS+=(--extra-records-jsonl "$path")
+    fi
+  done
+fi
+
 python -m aisafety.scripts.build_d4_human_llm_alignment_pairs \
   --workspace-root "$WORKDIR" \
   --records-jsonl "$RECORDS_JSONL" \
+  "${EXTRA_RECORD_ARGS[@]}" \
   --out-dir "$OUT_DIR" \
   --include-roles "$INCLUDE_ROLES" \
   --include-datasets "$INCLUDE_DATASETS" \

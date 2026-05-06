@@ -98,6 +98,55 @@ class D4HumanLlmAlignmentTest(unittest.TestCase):
 
         self.assertEqual(len(pairs), 6)
         self.assertEqual(summary["by_dataset_subset"], {"hc3::finance": 3, "hc3::medicine": 3})
+        self.assertIn("post_filter_inventory", summary)
+
+    def test_pair_builder_global_cap_keeps_requested_datasets(self) -> None:
+        rows = []
+        for dataset_id, subset in (
+            ("hc3", "finance"),
+            ("hc3_plus", "test_hc3_qa"),
+            ("h_llmc2", "medicine"),
+            ("hape", "news"),
+        ):
+            for idx in range(4):
+                group_id = f"{dataset_id}-{idx}"
+                role = "controlled_confirmation" if dataset_id == "hc3_plus" else "discovery_core"
+                for source in ("human", "llm"):
+                    rows.append(
+                        {
+                            "example_id": f"{source}-{group_id}",
+                            "group_id": group_id,
+                            "split": "train",
+                            "item_type": "general",
+                            "dataset": dataset_id,
+                            "subset": subset,
+                            "source": source,
+                            "title": group_id,
+                            "text": f"{source} text for {group_id} with enough words to pass filters",
+                            "meta": {
+                                "bundle_creation_dataset_id": dataset_id,
+                                "bundle_creation_role": role,
+                            },
+                        }
+                    )
+
+        pairs, summary = build_pairs_from_records(
+            rows,
+            include_roles={"discovery_core", "controlled_confirmation"},
+            include_datasets={"hc3", "hc3_plus", "h_llmc2", "hape"},
+            exclude_datasets=set(),
+            min_tokens=3,
+            max_tokens=100,
+            max_human_per_group=1,
+            max_llm_per_group=1,
+            cap_strategy="dataset_subset",
+            max_pairs_per_dataset=0,
+            max_total_pairs=8,
+            seed=7,
+        )
+
+        self.assertEqual(len(pairs), 8)
+        self.assertEqual(summary["by_dataset"], {"hape": 2, "h_llmc2": 2, "hc3": 2, "hc3_plus": 2})
 
     def test_candidate_registry_keeps_broad_weak_decision_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as td:
