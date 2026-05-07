@@ -1,0 +1,112 @@
+{
+  "version": "d4_bundle_intervention_candidates_v1",
+  "purpose": "Frozen bundle candidates for workshop-scale D4 feature perturbation.",
+  "sae_release": "gemma-scope-9b-pt-res-canonical",
+  "aggregation": "max",
+  "eligibility": {
+    "min_bundle_atoms_for_paper_claim": 3,
+    "min_sources_with_pairs": 4,
+    "preferred_source_sign_consistency": 0.8,
+    "allow_source_sensitive_consistency": 0.6,
+    "random_control_metric": "p90_abs_controlled_rho"
+  },
+  "bundles": [
+    {
+      "bundle_id": "structured_assistant_packaging",
+      "paper_label": "Structured assistant packaging",
+      "role": "primary",
+      "atoms": [
+        "bullet_or_list_structure",
+        "balanced_multi_part_completion",
+        "helpful_assistant_wrapper",
+        "sentence_length_balance",
+        "compression_vs_elaboration"
+      ],
+      "support_atoms": [
+        "nominalization_patterns",
+        "participial_modifier_usage"
+      ],
+      "primary_features": [
+        {"hidden_layer": 35, "feature_idx": 7508},
+        {"hidden_layer": 38, "feature_idx": 1378},
+        {"hidden_layer": 34, "feature_idx": 10845},
+        {"hidden_layer": 36, "feature_idx": 903},
+        {"hidden_layer": 35, "feature_idx": 5154},
+        {"hidden_layer": 38, "feature_idx": 12810},
+        {"hidden_layer": 41, "feature_idx": 14277},
+        {"hidden_layer": 40, "feature_idx": 11031},
+        {"hidden_layer": 35, "feature_idx": 12093},
+        {"hidden_layer": 37, "feature_idx": 4255}
+      ]
+    },
+    {
+      "bundle_id": "formal_institutional_packaging",
+      "paper_label": "Formal and institutional packaging",
+      "role": "primary",
+      "atoms": [
+        "formal_connectives",
+        "institutional_impersonality",
+        "professional_self_presentation",
+        "nominalization_patterns",
+        "complex_noun_phrase_chains"
+      ],
+      "support_atoms": [
+        "entity_grid_coherence",
+        "subordination_density"
+      ],
+      "primary_features": [
+        {"hidden_layer": 34, "feature_idx": 7691},
+        {"hidden_layer": 40, "feature_idx": 15478},
+        {"hidden_layer": 39, "feature_idx": 15970},
+        {"hidden_layer": 20, "feature_idx": 4882},
+        {"hidden_layer": 16, "feature_idx": 4882},
+        {"hidden_layer": 24, "feature_idx": 8530},
+        {"hidden_layer": 26, "feature_idx": 12358},
+        {"hidden_layer": 8, "feature_idx": 836},
+        {"hidden_layer": 12, "feature_idx": 10286},
+        {"hidden_layer": 4, "feature_idx": 2304}
+      ]
+    },
+    {
+      "bundle_id": "benefit_value_framing",
+      "paper_label": "Benefit and value framing",
+      "role": "primary",
+      "atoms": [
+        "benefit_first_packaging",
+        "feature_benefit_call_to_value_script",
+        "promotional_adjectives",
+        "enthusiasm_or_salesmanship"
+      ],
+      "support_atoms": [],
+      "primary_features": [
+        {"hidden_layer": 39, "feature_idx": 11694},
+        {"hidden_layer": 38, "feature_idx": 1406},
+        {"hidden_layer": 37, "feature_idx": 7036},
+        {"hidden_layer": 16, "feature_idx": 13713},
+        {"hidden_layer": 4, "feature_idx": 6442},
+        {"hidden_layer": 12, "feature_idx": 15740},
+        {"hidden_layer": 28, "feature_idx": 11816},
+        {"hidden_layer": 27, "feature_idx": 9305},
+        {"hidden_layer": 16, "feature_idx": 9623}
+      ]
+    }
+  ],
+  "secondary_atom_families": [
+    {
+      "family_id": "stance_calibration",
+      "atoms": [
+        "epistemic_hedging",
+        "hedge_markers",
+        "evidential_markers"
+      ]
+    },
+    {
+      "family_id": "narrative_quotation_packaging",
+      "atoms": [
+        "quotation_style",
+        "compression_vs_elaboration",
+        "sentence_length_balance"
+      ]
+    }
+  ]
+}
