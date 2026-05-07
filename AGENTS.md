@@ -193,6 +193,8 @@ D4 broad human-vs-LLM candidate alignment:
 python -m aisafety.scripts.build_d4_human_llm_alignment_pairs --help
 python -m aisafety.scripts.run_d4_candidate_feature_pair_alignment --help
 python -m aisafety.scripts.inspect_d4_candidate_alignment --help
+python -m aisafety.scripts.build_d4_bundle_candidate_registry --help
+python -m aisafety.scripts.run_d4_feature_perturbation --help
 ```
 
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
@@ -388,6 +390,17 @@ Only intervention tests support:
 
 - causal influence on judge behavior
 - repair or mitigation claims
+
+## Immediate LRZ Feature-Perturbation Scout
+
+The first intervention scout perturbs the frozen
+`formal_institutional_packaging` bundle by damping the eligible SAE features,
+then compares J0 margin changes on high-vs-low bundle-occurrence prompt pairs
+against layer-matched random-control feature damping.
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-formal-pert --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=06:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",BUNDLE_REGISTRY_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_bundle_candidate_registry_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_formal_bundle_feature_perturbation_scout_v1",BUNDLE_ID=formal_institutional_packaging,MAX_PAIRS=1200,DAMPING_STRENGTH=0.5,HIGH_LOW_FRAC=0.25,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512,RANDOM_CONTROL_RANK=1 cluster/lrz/d4_feature_perturbation.sbatch
+```
 
 ## Software Maintenance
 
