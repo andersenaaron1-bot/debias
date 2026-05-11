@@ -1,0 +1,435 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{natbib}
+
+\title{Sparse Features for Surface-Cue Reliance in Gemma-Based Reward Judges}
+\author{AISafety project draft}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+LLM-based judges often favor LLM-generated text over human text in realistic
+evaluation settings. This draft reports an ongoing mechanistic study of one
+possible substrate for that behavior: sparse residual-stream features that
+encode surface and discourse cues such as structured assistant formatting,
+formal institutional phrasing, and benefit/value framing. We construct a
+linguistically grounded atom-to-bundle ontology, discover candidate Gemma Scope
+SAE features for those atoms, test whether the frozen candidates align with a
+Gemma 2 reward judge's human-vs-LLM reward margins across HC3, HC3+, H-LLMC2,
+and HAP-E, and then mute selected feature bundles at inference time. The
+current strongest result is a causal perturbation of the
+\emph{structured assistant packaging} bundle: muting ten source-stable SAE
+features lowers the judge's LLM-minus-human reward margin by 0.0273 relative
+to matched random feature controls, with a 0.0410 shift in high-occurrence
+pairs and a 2.4 percentage point reduction in thresholded LLM preference.
+Formal/institutional packaging shows a smaller but specific margin effect,
+while benefit/value framing is weak and control-confounded. We treat these
+results as evidence for feature-level surface-cue reliance, not yet as a full
+repair method; broad retention and combined-intervention tests remain the next
+claim gates.
+\end{abstract}
+
+\section{Introduction}
+
+LLM judges and reward models are increasingly used as scalable proxies for
+human preference judgments \citep{zheng2023mtbench}. This scaling benefit comes
+with a familiar problem: judges can respond to cues that correlate with
+authorship or presentation rather than with task quality. Prior work documents
+position bias, verbosity bias, self-preference, and AI--AI bias in which LLM
+judges favor LLM-generated communications \citep{laurito2025aiaibias,
+panickssery2024selfrecognition,lee2024remodetect}. These findings establish
+that evaluator bias is real, but they do not identify the internal features
+that carry the bias.
+
+This project asks whether part of the LLM-favoring margin in a Gemma-based
+reward judge is mediated by sparse features for surface-cue bundles. The goal
+is not to show that every use of formatting or style is invalid. Structured
+answers can genuinely improve readability. The narrower question is whether
+specific sparse features for presentation form measurably affect reward margins
+on content-matched human-vs-LLM pairs, and whether those effects are specific
+relative to matched random feature perturbations.
+
+The current draft focuses on a single anchor judge, denoted J0, built from
+Gemma 2 9B \citep{gemmateam2024gemma2}. We use Gemma Scope residual-stream
+SAEs as the feature basis \citep{lieberum2024gemmascope}. The study proceeds in
+four stages:
+
+\begin{enumerate}[leftmargin=1.5em]
+\item build a linguistic atom-to-bundle ontology of surface cues;
+\item discover and freeze SAE features associated with those atoms and bundles;
+\item test whether frozen candidates align with J0 human-vs-LLM reward margins;
+\item mute selected feature bundles and compare reward-margin shifts against
+      layer-matched random controls.
+\end{enumerate}
+
+The findings are preliminary but structured enough to discuss. The strongest
+causal result is not broad ``formality'' but a bundle we call
+\emph{structured assistant packaging}: bullet/list structure, multi-part
+completion, helpful wrapper phrasing, sentence-length balance, and
+compression/elaboration. Muting this bundle produces a much larger and more
+source-stable reward-margin shift than muting formal/institutional packaging or
+benefit/value framing.
+
+\section{Related Work}
+
+\paragraph{LLM judges and AI--AI bias.}
+LLM-as-a-judge systems can approximate preference judgments at scale, but their
+failure modes include position effects, verbosity effects, self-preference, and
+other systematic biases \citep{zheng2023mtbench,panickssery2024selfrecognition}.
+The motivating ecological result is AI--AI bias: LLM judges favor
+LLM-generated paper abstracts, product descriptions, and movie synopses over
+human alternatives \citep{laurito2025aiaibias}. Reward models can also
+recognize aligned-model generations \citep{lee2024remodetect}, suggesting that
+authorship-correlated signals can be available internally to evaluators.
+
+\paragraph{Linguistic grounding.}
+Our ontology is motivated by register theory, computational sociolinguistics,
+and metadiscourse rather than by ad hoc prompt labels
+\citep{biber1993register,nguyen2016sociolinguistics,passonneau2014biberredux,
+hyland2005metadiscourse}. Recent human-vs-LLM corpora also show that rhetorical
+and grammatical features remain discriminative in modern generated text
+\citep{reinhart2024llmshumans}. We use HC3 \citep{guo2023hc3}, HC3+, H-LLMC2
+\citep{noepsl2025hllmc2}, and HAP-E \citep{browndw2024hape,
+reinhart2024llmshumans} to avoid defining the ontology solely from Laurito-style
+examples.
+
+\paragraph{Sparse feature methods.}
+Sparse autoencoders expose interpretable feature bases in transformer models
+\citep{cunningham2023sae,gao2024scaling}. Gemma Scope provides a public SAE
+basis for Gemma 2 \citep{lieberum2024gemmascope}. Recent work on sparse feature
+circuits and SAE-based model editing motivates using feature-level interventions
+as causal tests rather than stopping at feature correlation
+\citep{marks2024sparsecircuits,dunefsky2024transcoders,kissane2024attention}.
+This paper uses SAE feature muting as a first causal readout, not as a complete
+circuit analysis.
+
+\section{Experimental Setup}
+
+\subsection{Judge And Feature Basis}
+
+The anchor judge J0 is a Gemma 2 9B based scalar reward model with a LoRA
+adapter and value head. A text receives a scalar reward from the final
+non-padding token representation. A human-vs-LLM pair has margin
+\[
+  m = r(x_{\mathrm{LLM}}) - r(x_{\mathrm{human}}).
+\]
+Positive margin means the reward model favors the LLM text. We report
+continuous margins as the primary metric. The thresholded ``LLM chosen'' rate,
+\(\mathbb{1}[m > 0]\), is included only as a secondary diagnostic because it is
+an arbitrary scalar-model decision boundary rather than an independently
+elicited binary judge choice.
+
+For feature interpretation and perturbation we use Gemma Scope residual SAEs.
+Hidden-state index \(h\) maps to SAE layer \(h-1\). Candidate features are
+aggregated over valid tokens by max activation, matching the discovery and
+alignment pipeline.
+
+\subsection{Atom-to-Bundle Ontology}
+
+The primitive unit is an \emph{atom}: a local, linguistically interpretable cue
+such as bullet/list structure, formal connectives, or promotional adjectives.
+Atoms are grouped into broader \emph{bundles} only when multiple atoms form a
+coherent presentation family. The current frozen intervention registry contains
+three primary bundles:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.25\linewidth}p{0.48\linewidth}r}
+\toprule
+Bundle & Atoms & Target features \\
+\midrule
+Structured assistant packaging &
+bullet/list structure; balanced multi-part completion; helpful assistant
+wrapper; sentence-length balance; compression/elaboration &
+10 \\
+Formal/institutional packaging &
+formal connectives; institutional impersonality; professional
+self-presentation; nominalization patterns; complex noun phrase chains &
+9 clean / 10 with source-sensitive add-back \\
+Benefit/value framing &
+benefit-first packaging; feature-benefit scripts; promotional adjectives;
+enthusiasm/salesmanship &
+9 \\
+\bottomrule
+\end{tabular}
+\caption{Frozen bundle families used for current perturbation experiments.}
+\label{tab:bundles}
+\end{table}
+
+\subsection{Broad Human-vs-LLM Alignment Set}
+
+The broad confirmation set contains 10,000 content-matched human-vs-LLM pairs:
+2,797 HC3 pairs, 2,500 HC3+ pairs, 1,374 H-LLMC2 pairs, and 3,329 HAP-E pairs.
+J0 favors the LLM text in 78.57\% of these pairs, with mean LLM-minus-human
+margin 0.3317. This set is not used to manually craft perturbations; it
+provides the common evaluation substrate for candidate alignment and feature
+muting.
+
+\subsection{Candidate Discovery And Freeze}
+
+The discovery stage combines atom-level SAE localization, bundle-level
+aggregation, Laurito decision alignment, and broad human-vs-LLM alignment. The
+frozen registry contains 29 bundle-feature rows, 75 atom-feature rows, and 87
+matched random-control rows. It marks features as intervention-eligible when
+they exceed matched random-control baselines and show adequate source support.
+The registry also marks one formal feature, L34F7691, as source-sensitive.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Bundle & Features & Eligible & Source-sensitive & Max \(|\rho_c|\) & Mean \(|\rho_c|\) \\
+\midrule
+Structured assistant packaging & 10 & 10 & 0 & 0.451 & 0.296 \\
+Formal/institutional packaging & 10 & 9 & 1 & 0.437 & 0.220 \\
+Benefit/value framing & 9 & 9 & 0 & 0.350 & 0.197 \\
+\bottomrule
+\end{tabular}
+\caption{Frozen registry summary. \(\rho_c\) is the length/source-controlled
+Spearman correlation between feature activation deltas and J0 reward-margin
+deltas in the broad alignment run.}
+\label{tab:registry}
+\end{table}
+
+\subsection{Feature Muting Protocol}
+
+For a target bundle, we load the bundle's SAE features and register forward
+hooks at the corresponding decoder layers. For each token representation
+\(z\), the hook encodes \(z\) with the SAE, selects target feature activations,
+and subtracts the selected decoder-vector contributions. The 1.0 mute used in
+the current main runs is:
+\[
+  z' = z - \sum_{f \in F} a_f(z) W^{\mathrm{dec}}_f.
+\]
+For every target run, we also mute layer-matched random SAE features from the
+frozen registry. The main reported effect is:
+\[
+  \Delta_{\mathrm{target-control}}
+  =
+  \left(m_{\mathrm{target\ mute}} - m_{\mathrm{baseline}}\right)
+  -
+  \left(m_{\mathrm{random\ mute}} - m_{\mathrm{baseline}}\right).
+\]
+Negative values mean the target mute lowers the LLM-favoring margin more than
+the matched random mute.
+
+Each perturbation run uses the same 1,200-pair subset of the broad alignment
+set, with 165 H-LLMC2, 404 HAP-E, 337 HC3, and 294 HC3+ pairs. Pairs are binned
+by the target bundle's signed activation-delta score into high, middle, and low
+occurrence bins (300/600/300).
+
+\section{Results}
+
+\subsection{Structured Assistant Packaging Is The Strongest Causal Bundle}
+
+Muting structured assistant packaging produces a large, specific, and
+source-stable reduction in J0's LLM-minus-human margin. The all-pair
+target-control shift is -0.0273. In high-occurrence pairs the shift is -0.0410,
+while matched random controls are essentially flat.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Run & All pairs & High bin & Low bin & LLM-choice shift \\
+\midrule
+Structured assistant packaging & -0.0273 & -0.0410 & -0.0088 & -2.42 pp \\
+Formal/institutional, clean & -0.0048 & -0.0087 & -0.0011 & -0.25 pp \\
+Formal + L34F7691 add-back & -0.0038 & -0.0140 & +0.0078 & +0.42 pp \\
+Benefit/value framing & -0.0028 & -0.0032 & +0.0012 & -1.83 pp \\
+\bottomrule
+\end{tabular}
+\caption{1.0 feature mute effects. Entries are target-control changes in
+LLM-minus-human reward margin, except the last column which reports the target
+mute's thresholded LLM-choice-rate change.}
+\label{tab:perturbation-main}
+\end{table}
+
+The structured effect is substantially larger than the other bundles. On the
+same pair set, the structured all-pair target-control shift is about 5.6 times
+the clean formal shift and 9.7 times the benefit/value shift. The effect is
+also occurrence-sensitive: the high-minus-low target-control contrast is
+-0.0322, and the Spearman correlation between signed bundle occurrence and the
+target-control margin shift is -0.441.
+
+\subsection{The Structured Effect Is Source-Stable}
+
+Structured assistant packaging moves all four source families in the expected
+direction:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Bundle & H-LLMC2 & HAP-E & HC3 & HC3+ \\
+\midrule
+Structured assistant packaging & -0.0421 & -0.0273 & -0.0309 & -0.0149 \\
+Formal/institutional, clean & -0.0113 & -0.0018 & -0.0055 & -0.0046 \\
+Formal + L34F7691 add-back & -0.0159 & +0.0037 & -0.0058 & -0.0051 \\
+Benefit/value framing & -0.0012 & -0.0110 & +0.0014 & +0.0028 \\
+\bottomrule
+\end{tabular}
+\caption{Source-specific target-control margin shifts. Negative values indicate
+that the target mute lowers the LLM-favoring margin more than matched random
+controls.}
+\label{tab:source-effects}
+\end{table}
+
+This source table is important for interpretation. Structured packaging remains
+stable even on HAP-E, while formal packaging is weaker there and benefit/value
+framing is unstable across sources.
+
+\subsection{Formal Packaging Is Specific But Modest}
+
+The clean formal/institutional bundle has a small but directionally coherent
+effect: -0.0048 all-pair target-control shift and -0.0087 in high-occurrence
+pairs. Matched random controls remain near zero. This supports a secondary
+claim that formal packaging features contribute to reward margins, but the
+effect is too small to carry the paper alone.
+
+The source-sensitive add-back run confirms the registry warning. Adding
+L34F7691 increases the high-bin formal effect from -0.0087 to -0.0140, but it
+also reverses the low bin to +0.0078 and flips HAP-E positive (+0.0037).
+Therefore L34F7691 is useful as an ablation but should not be part of the clean
+main formal result.
+
+\subsection{Benefit/Value Framing Is Weak And Control-Confounded}
+
+Benefit/value framing is not currently a strong causal bundle. The target mute
+lowers margins by -0.0146, but matched random controls also lower margins by
+-0.0118, leaving only -0.0028 target-control effect. The source pattern is
+unstable: HAP-E moves negative, but HC3 and HC3+ move positive after
+target-control correction. This bundle is best treated as a weak contrast or
+as evidence that correlation-based feature selection does not guarantee a
+specific causal effect.
+
+\section{Interpretation}
+
+The current results support a more specific story than ``LLM judges like
+formal writing.'' The strongest causal evidence points to structured assistant
+packaging: a package of list structure, multi-part answer formatting, helpful
+wrapper phrasing, and balanced elaboration. This is a surface-cue bundle, but
+it is not necessarily meaningless. Structured formatting can improve perceived
+readability and may sometimes improve actual usefulness. The defensible claim
+is that sparse features for this presentation bundle materially affect the
+reward judge's LLM-favoring margin on content-matched human-vs-LLM pairs.
+
+The formal/institutional bundle provides a useful secondary result because it
+is less reducible to list formatting. Its effect is smaller but specific. The
+source-sensitive add-back is also informative: a high-alignment feature can
+increase high-bin sensitivity while damaging source and low-bin stability. This
+validates the registry's source-sensitivity flag and argues for keeping
+intervention candidates frozen and auditable.
+
+The benefit/value result is a negative or weak result. It suggests that some
+features discovered through atom alignment and broad margin correlation are not
+good intervention targets. A future selection rule should probably incorporate
+causal effect size directly, rather than ranking only by atom detection and
+margin correlation.
+
+\section{What The Current Evidence Does And Does Not Show}
+
+The current evidence supports:
+
+\begin{itemize}[leftmargin=1.5em]
+\item SAE features can be organized into interpretable atom-to-bundle
+      hypotheses.
+\item Frozen structured assistant packaging features are strongly aligned with
+      J0 human-vs-LLM margins.
+\item Muting those features selectively reduces LLM-favoring reward margins
+      relative to matched random feature controls.
+\item The structured effect is present across HC3, HC3+, H-LLMC2, and HAP-E.
+\item Formal/institutional features show a smaller but specific effect.
+\end{itemize}
+
+The current evidence does not yet show:
+
+\begin{itemize}[leftmargin=1.5em]
+\item that feature muting preserves general preference ability;
+\item that the structured features are never utility-relevant;
+\item that this is a complete circuit for AI--AI bias;
+\item that benefit/value framing is a stable causal bundle;
+\item that a combined intervention is an acceptable repair.
+\end{itemize}
+
+\section{Next Experiments}
+
+The next required experiment shifts from SAE features as the primary actuator
+to SAE features as interpretable detectors. First, deterministic
+surface-counterfactual rewrites should increase or decrease one presentation
+axis while approximately preserving content. The audit then measures
+\(R(x_{\mathrm{variant}})-R(x_{\mathrm{base}})\), length-controlled reward
+deltas, source consistency, and whether the matching SAE bundle activation
+moves in the expected direction. This directly asks whether J0 rewards
+structured assistant packaging, formal/institutional packaging, or benefit
+framing when the substantive answer is held approximately fixed.
+
+Second, the reward readout should be tested with pooled-state nulling. For each
+axis, we fit a direction from counterfactual hidden-state deltas and project
+the resulting subspace out before J0's scalar value head. This stronger
+intervention should report three quantities: reduction in counterfactual
+surface-cue reward deltas, change in broad human-vs-LLM reward margins, and
+retention on ordinary preference pairs. SAE feature muting remains a useful
+diagnostic baseline, but readout nulling is the more appropriate mitigation
+test if individual sparse latents are too weak or redundant as actuators.
+
+The paper should only move from diagnosis to mitigation language if readout
+nulling or a later surface-invariant adapter reduces counterfactual cue
+sensitivity while preserving most general preference behavior.
+
+\section{Limitations}
+
+The study currently uses one Gemma 2 9B anchor judge and one public SAE basis.
+The feature-muting method subtracts SAE decoder-vector contributions and is not
+a full circuit intervention. Max-pooled feature activation is useful for bundle
+occurrence but may miss token-position specificity. Deterministic
+counterfactuals are auditable but not perfect semantic controls, and
+readout-space nulling is less mechanistically localized than SAE feature
+damping. The human-vs-LLM pair set is broad but not a substitute for
+task-specific human preference labels. Most importantly, reduced LLM-favoring
+margin is not automatically improved judgment: the intervention must pass
+retention tests before being described as repair.
+
+\section{Provisional Paper Narrative}
+
+A workshop paper can make the following compact claim:
+
+\begin{quote}
+We build a linguistic atom-to-bundle ontology for surface cues in
+human-vs-LLM evaluation, localize candidate cues in Gemma Scope SAE features,
+and show that a source-stable structured assistant packaging feature set
+selectively tracks and weakly intervenes on a Gemma-based reward judge's
+LLM-favoring margins. We then use deterministic text counterfactuals and
+readout-space nulling to test whether those interpretable cue bundles drive
+reward under approximate content preservation. The strongest current effect is
+not generic formality but an assistant-style structure bundle; formal packaging
+is smaller but specific, and benefit/value framing is not stable under matched
+controls.
+\end{quote}
+
+This narrative keeps the current findings salient without overstating them.
+The main open question for the final version is whether counterfactual audit
+and readout nulling show enough cue-specific reward movement and preference
+retention to be framed as a useful mitigation method rather than only as a
+mechanistic diagnostic.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

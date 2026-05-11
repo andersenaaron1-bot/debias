@@ -195,6 +195,9 @@ python -m aisafety.scripts.run_d4_candidate_feature_pair_alignment --help
 python -m aisafety.scripts.inspect_d4_candidate_alignment --help
 python -m aisafety.scripts.build_d4_bundle_candidate_registry --help
 python -m aisafety.scripts.run_d4_feature_perturbation --help
+python -m aisafety.scripts.build_d4_surface_counterfactual_pairs --help
+python -m aisafety.scripts.run_d4_surface_counterfactual_audit --help
+python -m aisafety.scripts.run_d4_readout_surface_nulling --help
 ```
 
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
@@ -377,6 +380,13 @@ Broad human-vs-LLM candidate alignment supports:
 - activation deltas align with J0 LLM-minus-human reward margins beyond Laurito
 - source/domain stability and matched random-control comparisons are measured
 
+Surface counterfactual auditing supports:
+
+- deterministic cue-increase/cue-decrease text variants move J0 rewards under
+  approximate content preservation
+- reward deltas are measured with length/source stratification
+- SAE bundle activation deltas move in the expected direction
+
 Feature-card inspection supports:
 
 - a feature is an interpretable candidate cue feature after top examples and
@@ -385,6 +395,11 @@ Feature-card inspection supports:
 Bundle graph construction supports:
 
 - atom features form a bundle-level hypothesis
+
+Readout-space nulling supports:
+
+- a pooled-state surface-cue subspace can reduce counterfactual cue sensitivity
+- human-vs-LLM margin changes and general preference retention are measured
 
 Only intervention tests support:
 
@@ -400,6 +415,26 @@ against layer-matched random-control feature damping.
 
 ```bash
 cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-formal-pert --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=06:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",BUNDLE_REGISTRY_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_bundle_candidate_registry_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_formal_bundle_feature_perturbation_scout_v1",BUNDLE_ID=formal_institutional_packaging,MAX_PAIRS=1200,DAMPING_STRENGTH=0.5,HIGH_LOW_FRAC=0.25,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512,RANDOM_CONTROL_RANK=1 cluster/lrz/d4_feature_perturbation.sbatch
+```
+
+## Immediate LRZ Surface-Counterfactual And Readout-Nulling Commands
+
+Build deterministic surface-cue counterfactuals on CPU:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-surf-cf --cpus-per-task=2 --mem=16G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_v1",MAX_PAIRS=0 cluster/lrz/d4_surface_counterfactual_pairs.sbatch
+```
+
+Audit J0 reward deltas and matching SAE bundle activation deltas:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-surf-audit --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",COUNTERFACTUAL_JSONL="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_v1/counterfactuals.jsonl",BUNDLE_REGISTRY_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_bundle_candidate_registry_v1",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_surface_counterfactual_audit_v1",MAX_COUNTERFACTUALS=0,SCORE_BATCH_SIZE=4,SAE_BATCH_SIZE=4,SAE_TOKEN_CHUNK_SIZE=1024,MAX_LENGTH=512 cluster/lrz/d4_surface_counterfactual_audit.sbatch
+```
+
+Fit pooled-state surface directions and evaluate readout-space nulling:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-null --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",COUNTERFACTUAL_JSONL="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_v1/counterfactuals.jsonl",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",PREF_VAL_JSONL="$ARTROOT/data/derived/pref_pairs_shp2/pref_pairs_val.jsonl",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_readout_surface_nulling_v1",MAX_COUNTERFACTUALS=0,MAX_PAIRS=3000,MAX_PREF_PAIRS=1000,FIT_FRAC=0.5,MIN_DIRECTION_ROWS=20,SCORE_BATCH_SIZE=4,ENCODE_BATCH_SIZE=4,MAX_LENGTH=512 cluster/lrz/d4_readout_surface_nulling.sbatch
 ```
 
 ## Software Maintenance
@@ -439,9 +474,12 @@ Use explicit stage, judge, and purpose names:
 - `artifacts/mechanistic/d4_j0_sae_feature_analysis_v1`
 - `artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1`
 - `data/derived/d4_human_llm_alignment_pairs_v1`
+- `data/derived/d4_surface_counterfactual_pairs_v1`
 - `artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1`
 - `artifacts/mechanistic/d4_j0_bundle_graph_v1`
 - `artifacts/mechanistic/d4_j0_intervention_scout_v1`
+- `artifacts/mechanistic/d4_j0_surface_counterfactual_audit_v1`
+- `artifacts/mechanistic/d4_j0_readout_surface_nulling_v1`
 
 For cross-model contrasts, include the judge id:
 
@@ -469,3 +507,5 @@ When a new source affects project direction or paper claims:
 8. Do not claim utility independence until content-anchor controls are valid.
 9. Keep execution guidance LRZ-centered.
 10. Keep live planning out of `docs/`.
+11. Treat SAE features as detectors unless text counterfactual or readout-space
+    interventions show reward impact and retention.
