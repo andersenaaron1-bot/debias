@@ -198,6 +198,8 @@ python -m aisafety.scripts.run_d4_feature_perturbation --help
 python -m aisafety.scripts.build_d4_surface_counterfactual_pairs --help
 python -m aisafety.scripts.run_d4_surface_counterfactual_audit --help
 python -m aisafety.scripts.run_d4_readout_surface_nulling --help
+python -m aisafety.scripts.build_d4_bt_stage_contrast_pairs --help
+python -m aisafety.scripts.run_d4_bt_stage_contrast --help
 ```
 
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
@@ -419,6 +421,15 @@ cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" &
 
 ## Immediate LRZ Surface-Counterfactual And Readout-Nulling Commands
 
+The active surface-cue counterfactual axes are
+`structured_assistant_packaging`, `answer_likeness_packaging`,
+`formal_institutional_packaging`, and `benefit_value_framing`. Prefer
+axis-specific output directories for paper-facing comparisons. The current
+high-value sequence is to rerun `structured_assistant_packaging` with the
+broadened bidirectional paragraphize/listify transform, then run
+`answer_likeness_packaging` separately to test direct-answer scaffolding beyond
+list formatting.
+
 Build deterministic surface-cue counterfactuals on CPU:
 
 ```bash
@@ -435,6 +446,22 @@ Fit pooled-state surface directions and evaluate readout-space nulling:
 
 ```bash
 cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-null --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",COUNTERFACTUAL_JSONL="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_v1/counterfactuals.jsonl",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",PREF_VAL_JSONL="$ARTROOT/data/derived/pref_pairs_shp2/pref_pairs_val.jsonl",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_readout_surface_nulling_v1",MAX_COUNTERFACTUALS=0,MAX_PAIRS=3000,MAX_PREF_PAIRS=1000,FIT_FRAC=0.5,MIN_DIRECTION_ROWS=20,SCORE_BATCH_SIZE=4,ENCODE_BATCH_SIZE=4,MAX_LENGTH=512 cluster/lrz/d4_readout_surface_nulling.sbatch
+```
+
+Build Bradley-Terry stage-contrast rows from a deterministic counterfactual
+JSONL before scoring base, instruction-tuned, or reward-stage models:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-bt-pairs --cpus-per-task=2 --mem=16G --time=00:20:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",COUNTERFACTUAL_JSONL="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_answer_likeness_v1/counterfactuals.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_bt_stage_contrast_pairs_answer_likeness_v1",AXES=answer_likeness_packaging,MAX_COUNTERFACTUALS=0,INCLUDE_ORDER_SWAPS=1 cluster/lrz/d4_bt_stage_contrast_pairs.sbatch
+```
+
+Score a BT stage on GPU. Use `STAGE=base_lm` with
+`MODEL_ID=google/gemma-2-9b` and `PROMPT_STYLE=plain`; use `STAGE=it_lm` with
+`MODEL_ID=google/gemma-2-9b-it` and `PROMPT_STYLE=chat_template`; use
+`STAGE=reward_j0` with the J0 reward directory and `PROMPT_STYLE=plain`.
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-bt-stage --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$ARTROOT/data/derived/d4_bt_stage_contrast_pairs_answer_likeness_v1/bt_pairs.jsonl",STAGE=it_lm,MODEL_ID=google/gemma-2-9b-it,PROMPT_STYLE=chat_template,REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_bt_stage_contrast_answer_likeness_it_v1",MAX_PAIRS=0,SCORE_BATCH_SIZE=4,MAX_LENGTH=2048 cluster/lrz/d4_bt_stage_contrast.sbatch
 ```
 
 ## Software Maintenance

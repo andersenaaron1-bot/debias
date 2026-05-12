@@ -393,8 +393,12 @@ Responsibilities:
 
 - sample content-matched human/LLM pairs from the v3 broad pair file
 - create deterministic cue-increase and cue-decrease variants for structured
-  assistant packaging, formal/institutional packaging, and benefit/value
-  framing
+  assistant packaging, answer-likeness packaging, formal/institutional
+  packaging, and benefit/value framing
+- keep structured assistant packaging and broader answer-likeness packaging as
+  separable axes: structured packaging isolates visible list/wrapper scaffolds;
+  answer-likeness adds or removes direct-answer frames such as answer/details
+  labels and concise response scaffolds
 - write explicit skip summaries for unchanged, too-short, and length-filtered
   transforms
 - avoid LLM-generated rewrites in v1 so that the audit does not import another
@@ -487,10 +491,39 @@ Outputs:
   - random-control comparison table
   - per-source table
 
+### Task 6: Bradley-Terry Model-Stage Contrast
+
+Add:
+
+- `src/aisafety/scripts/build_d4_bt_stage_contrast_pairs.py`
+- `src/aisafety/scripts/run_d4_bt_stage_contrast.py`
+- `cluster/lrz/d4_bt_stage_contrast_pairs.sbatch`
+- `cluster/lrz/d4_bt_stage_contrast.sbatch`
+
+Responsibilities:
+
+- turn deterministic surface counterfactuals into order-swapped pairwise
+  comparisons with an explicit cue-plus side
+- score base and instruction-tuned backbones with forced-choice `A`/`B`
+  log-probability margins
+- score J0 with scalar reward margins on the same cue-plus/cue-minus texts
+- compare whether answer-likeness and structured packaging sensitivity is
+  weak in the base model, amplified by instruction tuning, and further exposed
+  or changed by the reward head
+
+Outputs:
+
+- `bt_pairs.jsonl`
+- `bt_stage_scores.csv`
+- `stage_summary.csv`
+- `manifest.json`
+
 ## LRZ Run Order
 
 1. Build or refresh registry on CPU.
-2. Build deterministic surface counterfactuals on CPU.
+2. Build deterministic surface counterfactuals on CPU, preferably in
+   axis-specific directories for structured assistant packaging and
+   answer-likeness packaging before combining axes.
 3. Run a small GPU counterfactual audit with `MAX_COUNTERFACTUALS=500`.
 4. If the audit is nonempty, run the full counterfactual audit with SAE bundle
    activation deltas.
@@ -499,9 +532,11 @@ Outputs:
    - evaluate on held-out counterfactual rows
    - evaluate broad human-vs-LLM margin shift
    - evaluate SHP-2 preference retention
-6. Keep SAE feature muting as a diagnostic baseline, not the only intervention
+6. Build Bradley-Terry stage-contrast rows and score base, instruction-tuned,
+   and J0 stages for answer-likeness and structured packaging.
+7. Keep SAE feature muting as a diagnostic baseline, not the only intervention
    result.
-7. Generate readout and freeze paper tables.
+8. Generate readout and freeze paper tables.
 
 ## Paper Narrative
 

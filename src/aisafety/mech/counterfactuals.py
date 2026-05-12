@@ -9,6 +9,7 @@ from typing import Callable
 
 DEFAULT_SURFACE_AXES = (
     "structured_assistant_packaging",
+    "answer_likeness_packaging",
     "formal_institutional_packaging",
     "benefit_value_framing",
 )
@@ -41,6 +42,19 @@ TransformFn = Callable[[str], tuple[str, tuple[str, ...], str | None]]
 
 _BULLET_PREFIX_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|[a-zA-Z][.)]\s+)")
 _LIST_PREFIX_RE = re.compile(r"(?m)^\s*(?:[-*+]\s+|\d+[.)]\s+|[a-zA-Z][.)]\s+)")
+_MARKDOWN_HEADING_RE = re.compile(r"(?m)^\s{0,3}#{1,6}\s+")
+_BOLD_LABEL_RE = re.compile(
+    r"(?im)^\s*\*{0,2}(?:answer|short answer|summary|details|key points|takeaway|bottom line|"
+    r"steps?|reason(?:ing)?|why|caveat|limitations?|in practice|practical implication)s?\*{0,2}\s*:\s*"
+)
+_ASSISTANT_WRAPPER_RE = re.compile(
+    r"(?im)^\s*(?:here(?:'s| is)|below is|let'?s break (?:it|this) down|"
+    r"the answer is|in short|to summarize|overall)\b[^:\n]{0,80}:?\s*$"
+)
+_INLINE_PREFACE_RE = re.compile(
+    r"(?i)^\s*(?:here(?:'s| is)|below is|in short|short answer|answer|bottom line|takeaway)\s*:\s*"
+)
+_ORDINAL_SCAFFOLD_RE = re.compile(r"(?i)\b(?:first|second|third|finally|next),\s+")
 _SPACE_RE = re.compile(r"[ \t]+")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
@@ -92,6 +106,28 @@ def _has_list_structure(text: str) -> bool:
     return sum(1 for line in lines if _BULLET_PREFIX_RE.search(line)) >= 2
 
 
+def _has_structured_assistant_packaging(text: str) -> bool:
+    text = normalize_text(text)
+    if _has_list_structure(text):
+        return True
+    if _MARKDOWN_HEADING_RE.search(text) or _BOLD_LABEL_RE.search(text):
+        return True
+    if _ASSISTANT_WRAPPER_RE.search(text) or _INLINE_PREFACE_RE.search(text):
+        return True
+    return len(_ORDINAL_SCAFFOLD_RE.findall(text)) >= 2
+
+
+def _has_answer_likeness_packaging(text: str) -> bool:
+    text = normalize_text(text)
+    if _BOLD_LABEL_RE.search(text) or _INLINE_PREFACE_RE.search(text):
+        return True
+    if re.search(r"(?i)\b(?:answer|reason|caveat|takeaway|bottom line|in practice)\s*:", text):
+        return True
+    if _has_structured_assistant_packaging(text):
+        return True
+    return False
+
+
 def _strip_list_markers(text: str) -> str:
     lines = []
     for line in normalize_text(text).split("\n"):
@@ -129,12 +165,53 @@ def structured_decrease(text: str) -> tuple[str, tuple[str, ...], str | None]:
     """Decrease visible assistant-style structure by paragraphizing lists."""
 
     original = normalize_text(text)
-    if not _has_list_structure(original) and "\n" not in original:
+    if not _has_structured_assistant_packaging(original) and "\n" not in original:
         return "", (), "not_structured"
-    text = re.sub(r"(?im)^\s*(?:key points|summary|answer|here(?:'s| is).{0,40}):\s*$", "", original)
+    text = _MARKDOWN_HEADING_RE.sub("", original)
+    text = _ASSISTANT_WRAPPER_RE.sub("", text)
+    text = _BOLD_LABEL_RE.sub("", text)
+    text = _INLINE_PREFACE_RE.sub("", text)
     text = _strip_list_markers(text)
+    text = _ORDINAL_SCAFFOLD_RE.sub("", text)
     text = re.sub(r"\s+", " ", text).strip()
-    return text, ("removed_list_structure", "paragraphized"), None
+    return text, ("removed_assistant_packaging", "paragraphized"), None
+
+
+def answer_likeness_increase(text: str) -> tuple[str, tuple[str, ...], str | None]:
+    """Increase answer-like presentation without adding substantive claims."""
+
+    if _has_answer_likeness_packaging(text):
+        return "", (), "already_answer_like"
+    sentences = split_sentences(text)
+    if len(sentences) < 2:
+        return "", (), "too_few_segments"
+    first = _ensure_terminal(sentences[0])
+    rest = [_ensure_terminal(sentence) for sentence in sentences[1:]]
+    if len(rest) == 1:
+        body = rest[0]
+    else:
+        body = "\n".join(f"- {sentence}" for sentence in rest)
+    return f"Answer:\n{first}\n\nDetails:\n{body}", (
+        "added_answer_frame",
+        "added_details_label",
+        "answer_like_scaffold",
+    ), None
+
+
+def answer_likeness_decrease(text: str) -> tuple[str, tuple[str, ...], str | None]:
+    """Remove direct-answer scaffolds and assistant presentation labels."""
+
+    original = normalize_text(text)
+    if not _has_answer_likeness_packaging(original):
+        return "", (), "not_answer_like"
+    text = _MARKDOWN_HEADING_RE.sub("", original)
+    text = _ASSISTANT_WRAPPER_RE.sub("", text)
+    text = _BOLD_LABEL_RE.sub("", text)
+    text = _INLINE_PREFACE_RE.sub("", text)
+    text = _strip_list_markers(text)
+    text = _ORDINAL_SCAFFOLD_RE.sub("", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text, ("removed_answer_frame", "removed_answer_like_scaffold", "paragraphized"), None
 
 
 _FORMAL_DECREASE_REPLACEMENTS = (
@@ -215,6 +292,8 @@ def benefit_increase(text: str) -> tuple[str, tuple[str, ...], str | None]:
 TRANSFORMS: dict[tuple[str, str], tuple[str, TransformFn]] = {
     ("structured_assistant_packaging", "increase"): ("structured_listify_v1", structured_increase),
     ("structured_assistant_packaging", "decrease"): ("structured_paragraphize_v1", structured_decrease),
+    ("answer_likeness_packaging", "increase"): ("answer_likeness_scaffold_v1", answer_likeness_increase),
+    ("answer_likeness_packaging", "decrease"): ("answer_likeness_flatten_v1", answer_likeness_decrease),
     ("formal_institutional_packaging", "increase"): ("formal_preface_v1", formal_increase),
     ("formal_institutional_packaging", "decrease"): ("formal_marker_strip_v1", formal_decrease),
     ("benefit_value_framing", "increase"): ("benefit_sentence_v1", benefit_increase),
