@@ -198,12 +198,59 @@ python -m aisafety.scripts.run_d4_feature_perturbation --help
 python -m aisafety.scripts.build_d4_surface_counterfactual_pairs --help
 python -m aisafety.scripts.run_d4_surface_counterfactual_audit --help
 python -m aisafety.scripts.run_d4_readout_surface_nulling --help
+python -m aisafety.scripts.build_d4_human_llm_stage_contrast_pairs --help
+python -m aisafety.scripts.run_d4_human_llm_stage_contrast --help
+python -m aisafety.scripts.summarize_d4_human_llm_stage_contrasts --help
 python -m aisafety.scripts.build_d4_bt_stage_contrast_pairs --help
 python -m aisafety.scripts.run_d4_bt_stage_contrast --help
+python -m aisafety.scripts.build_judge_competence_pref_pairs --help
+python -m aisafety.scripts.build_d4_invariance_style_groups --help
 ```
 
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
 when only imports from this repo are needed.
+
+## Immediate LRZ Judge-Competence Adapter Pair Commands
+
+The clean adapter contrast for judge-sway/invariance experiments is a fresh
+BT reward adapter trained on the same backbone and same competence preference
+data, with and without the D4 surface-realization invariance term:
+
+- `jbt_pref_competence_v1`: preference stream plus zero-weight style stream
+- `jbt_pref_competence_inv_v1`: identical stream mix plus invariance loss
+
+This contrast should be trained from `google/gemma-2-9b-it`, not on top of an
+existing J0 adapter. Build preference data from SHP-2 plus HelpSteer2-derived
+high-utility-gap BT pairs. Build invariance groups from deterministic D4
+surface counterfactuals; keep Laurito as evaluation, not training.
+
+Obtain or refresh the public source datasets on LRZ if missing:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=jbt-src-data --cpus-per-task=2 --mem=48G --time=03:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -m aisafety.scripts.build_pref_pairs_shp2 --out-dir '$ARTROOT/data/derived/pref_pairs_shp2' --max-train 220000 --max-val 20000 && python -m aisafety.scripts.build_helpsteer2_anchor --out-dir '$ARTROOT/data/derived/helpsteer2_anchor' --max-train 0 --max-val 0"
+```
+
+Build the merged competence preference file:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=jbt-pref --cpus-per-task=2 --mem=32G --time=00:45:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src" --wrap="python -m aisafety.scripts.build_judge_competence_pref_pairs --workspace-root '$WORKDIR' --shp-train-jsonl '$ARTROOT/data/derived/pref_pairs_shp2/pref_pairs_train.jsonl' --shp-val-jsonl '$ARTROOT/data/derived/pref_pairs_shp2/pref_pairs_val.jsonl' --helpsteer-train-jsonl '$ARTROOT/data/derived/helpsteer2_anchor/anchor_train.jsonl' --helpsteer-val-jsonl '$ARTROOT/data/derived/helpsteer2_anchor/anchor_val.jsonl' --out-dir '$ARTROOT/data/derived/judge_competence_pref_v1' --max-shp-train 120000 --max-shp-val 10000 --max-helpsteer-train 80000 --max-helpsteer-val 10000 --min-helpsteer-utility-gap 0.25 --max-helpsteer-pairs-per-prompt 3"
+```
+
+Build deterministic invariance counterfactuals and trainer style groups:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=jbt-inv-data --cpus-per-task=2 --mem=32G --time=01:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src" --wrap="python -m aisafety.scripts.build_d4_surface_counterfactual_pairs --workspace-root '$WORKDIR' --pair-jsonl '$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl' --out-dir '$ARTROOT/data/derived/d4_surface_counterfactual_pairs_invariance_train_v1' --axes structured_assistant_packaging,answer_likeness_packaging --max-pairs 0 && python -m aisafety.scripts.build_d4_invariance_style_groups --workspace-root '$WORKDIR' --counterfactual-jsonl '$ARTROOT/data/derived/d4_surface_counterfactual_pairs_invariance_train_v1/counterfactuals.jsonl' --out-dir '$ARTROOT/data/derived/d4_invariance_style_groups_v1' --axes structured_assistant_packaging,answer_likeness_packaging --group-mode per_axis --include-objective-bullets --max-variants-per-group 4 --val-frac 0.1"
+```
+
+Train the adapter pair after both data-build jobs complete:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=jbt-pref --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -m aisafety.scripts.run_experiment_config --config '$WORKDIR/configs/experiments/jbt_pref_competence_v1.json' --workspace-root '$ARTROOT'"
+```
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=jbt-pref-inv --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE" --wrap="python -m aisafety.scripts.run_experiment_config --config '$WORKDIR/configs/experiments/jbt_pref_competence_inv_v1.json' --workspace-root '$ARTROOT'"
+```
 
 ## LRZ Preflight
 
@@ -448,6 +495,113 @@ Fit pooled-state surface directions and evaluate readout-space nulling:
 cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=d4-null --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=08:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",COUNTERFACTUAL_JSONL="$ARTROOT/data/derived/d4_surface_counterfactual_pairs_v1/counterfactuals.jsonl",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",PREF_VAL_JSONL="$ARTROOT/data/derived/pref_pairs_shp2/pref_pairs_val.jsonl",REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_j0_readout_surface_nulling_v1",MAX_COUNTERFACTUALS=0,MAX_PAIRS=3000,MAX_PREF_PAIRS=1000,FIT_FRAC=0.5,MIN_DIRECTION_ROWS=20,SCORE_BATCH_SIZE=4,ENCODE_BATCH_SIZE=4,MAX_LENGTH=512 cluster/lrz/d4_readout_surface_nulling.sbatch
 ```
 
+## Immediate LRZ Human-vs-LLM Training-Stage Contrast
+
+This diagnostic tests whether base-to-instruction post-training shifts
+LLM-minus-human preference margins on the same broad paired corpus. It is not a
+feature-localization claim and does not identify RLHF separately from SFT/DPO
+unless the compared model family exposes matched intermediate checkpoints.
+
+Recommended first-pass Tulu/Llama ladder:
+
+- `llama31_base`: `meta-llama/Llama-3.1-8B`, plain forced-choice prompt
+- `tulu3_sft`: `allenai/Llama-3.1-Tulu-3-8B-SFT`, chat-template forced choice
+- `tulu3_dpo`: `allenai/Llama-3.1-Tulu-3-8B-DPO`, chat-template forced choice
+- `tulu3_final`: `allenai/Llama-3.1-Tulu-3-8B`, chat-template forced choice
+- `llama31_instruct`: `meta-llama/Llama-3.1-8B-Instruct`, chat-template forced
+  choice, if gated access is available
+
+Use the matrix submitter from the LRZ login node for the scout. It queues the
+pair builder, all scoring jobs with dependencies, and the summary job. The
+default includes the official Llama instruct comparison and response-likelihood
+controls for base/SFT/DPO; set `INCLUDE_RESPONSE_LIKELIHOOD=0` to run only the
+forced-choice ladder.
+
+```bash
+cd "$WORKDIR" && RUN_TAG=tulu_stage_scout_v1 PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl" MAX_SOURCE_PAIRS=1000 INCLUDE_META_INSTRUCT=1 INCLUDE_RESPONSE_LIKELIHOOD=1 bash cluster/lrz/submit_d4_human_llm_tulu_stage_matrix.sh
+```
+
+For the full broad pair file after the scout validates container imports and
+nonempty outputs, rerun with `MAX_SOURCE_PAIRS=0` and a fresh `RUN_TAG`.
+
+Temporary local-cluster fallback when LRZ is unavailable:
+
+- use the A100s first: GPU `1` and `7` are 80GB, GPU `0` is 40GB
+- avoid V100 and RTX 8000 for the default CausalLM path because it loads models
+  in bf16
+- keep Hugging Face caches on large storage
+- export an HF token with accepted Llama 3.1 access before running Meta stages
+
+Suggested local setup:
+
+```bash
+cd /path/to/AISafety
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --index-url https://download.pytorch.org/whl/cu124 torch
+python -m pip install -e .
+export WORKDIR=$PWD
+export ARTROOT=/path/to/large/debias-artifacts
+export HF_HOME=$ARTROOT/.cache/huggingface
+export TRANSFORMERS_CACHE=$HF_HOME/transformers
+export HF_DATASETS_CACHE=$HF_HOME/datasets
+export HF_TOKEN=<token-with-llama-access>
+```
+
+Run the local scout directly, without Slurm:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=tulu_stage_scout_local_v1 PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl" MAX_SOURCE_PAIRS=1000 GPU_A=1 GPU_B=7 GPU_C=0 INCLUDE_META_INSTRUCT=1 INCLUDE_RESPONSE_LIKELIHOOD=0 bash cluster/local/run_d4_human_llm_tulu_stage_matrix.sh
+```
+
+If the forced-choice ladder completes cleanly, add the likelihood controls:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=tulu_stage_likelihood_local_v1 PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl" MAX_SOURCE_PAIRS=1000 GPU_A=1 GPU_B=7 GPU_C=0 INCLUDE_META_INSTRUCT=1 INCLUDE_RESPONSE_LIKELIHOOD=1 bash cluster/local/run_d4_human_llm_tulu_stage_matrix.sh
+```
+
+Build order-swapped human-vs-LLM BT rows from the broad pair file:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=d4-hllm-stage-pairs --cpus-per-task=2 --mem=16G --time=00:20:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",PAIR_JSONL="$ARTROOT/data/derived/d4_human_llm_alignment_pairs_strat10k_v3/pairs.jsonl",OUT_DIR="$ARTROOT/data/derived/d4_human_llm_stage_contrast_pairs_strat10k_v1",MAX_PAIRS=0,INCLUDE_ORDER_SWAPS=1 cluster/lrz/d4_human_llm_stage_contrast_pairs.sbatch
+```
+
+Score Gemma base and instruction checkpoints with order-debiased forced-choice
+logprobs. Use `PROMPT_STYLE=plain` for base and run both `plain` and
+`chat_template` for instruction-tuned checkpoints to separate checkpoint shift
+from chat-template elicitation:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=hllm-gemma2-base --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$ARTROOT/data/derived/d4_human_llm_stage_contrast_pairs_strat10k_v1/bt_pairs.jsonl",SCORING_MODE=forced_choice,STAGE_LABEL=gemma2_9b_base_forced_plain,MODEL_ID=google/gemma-2-9b,PROMPT_STYLE=plain,OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_hllm_stage_gemma2_9b_base_forced_plain_v1",MAX_PAIRS=0,SCORE_BATCH_SIZE=4,MAX_LENGTH=2048 cluster/lrz/d4_human_llm_stage_contrast.sbatch
+```
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=hllm-gemma2-it --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$ARTROOT/data/derived/d4_human_llm_stage_contrast_pairs_strat10k_v1/bt_pairs.jsonl",SCORING_MODE=forced_choice,STAGE_LABEL=gemma2_9b_it_forced_chat,MODEL_ID=google/gemma-2-9b-it,PROMPT_STYLE=chat_template,OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_hllm_stage_gemma2_9b_it_forced_chat_v1",MAX_PAIRS=0,SCORE_BATCH_SIZE=4,MAX_LENGTH=2048 cluster/lrz/d4_human_llm_stage_contrast.sbatch
+```
+
+Run response-likelihood as a base-model-friendly familiarity control. This is
+not a judge-preference measure; it asks whether the model assigns higher
+conditional likelihood to the LLM response than the human response:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=hllm-gemma2-base-like --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$ARTROOT/data/derived/d4_human_llm_stage_contrast_pairs_strat10k_v1/bt_pairs.jsonl",SCORING_MODE=response_likelihood,STAGE_LABEL=gemma2_9b_base_response_likelihood,MODEL_ID=google/gemma-2-9b,PROMPT_STYLE=plain,OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_hllm_stage_gemma2_9b_base_response_likelihood_v1",MAX_PAIRS=0,SCORE_BATCH_SIZE=2,MAX_LENGTH=2048 cluster/lrz/d4_human_llm_stage_contrast.sbatch
+```
+
+Score J0 or a fresh reward adapter with independent scalar scores:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=hllm-j0 --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$ARTROOT/data/derived/d4_human_llm_stage_contrast_pairs_strat10k_v1/bt_pairs.jsonl",SCORING_MODE=reward_scalar,STAGE_LABEL=j0_reward_scalar_prompt_response,MODEL_ID=google/gemma-2-9b-it,REWARD_RUN_DIR="$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact",REWARD_INPUT_FORMAT=prompt_response,OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_hllm_stage_j0_reward_scalar_prompt_response_v1",MAX_PAIRS=0,SCORE_BATCH_SIZE=4,MAX_LENGTH=512 cluster/lrz/d4_human_llm_stage_contrast.sbatch
+```
+
+Summarize paired stage deltas on CPU. `RUNS` and `CONTRASTS` use
+colon-separated lists because commas in Slurm `--export` split environment
+variables:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=hllm-stage-sum --cpus-per-task=2 --mem=8G --time=00:15:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",RUNS="gemma2_base=$ARTROOT/artifacts/mechanistic/d4_hllm_stage_gemma2_9b_base_forced_plain_v1:gemma2_it=$ARTROOT/artifacts/mechanistic/d4_hllm_stage_gemma2_9b_it_forced_chat_v1:j0=$ARTROOT/artifacts/mechanistic/d4_hllm_stage_j0_reward_scalar_prompt_response_v1",CONTRASTS="gemma2_it_minus_base=gemma2_it-gemma2_base:j0_minus_it=j0-gemma2_it",OUT_DIR="$ARTROOT/artifacts/mechanistic/d4_human_llm_stage_contrast_summary_gemma2_j0_v1" cluster/lrz/d4_human_llm_stage_contrast_summary.sbatch
+```
+
 Build Bradley-Terry stage-contrast rows from a deterministic counterfactual
 JSONL before scoring base, instruction-tuned, or reward-stage models:
 
@@ -501,8 +655,12 @@ Use explicit stage, judge, and purpose names:
 - `artifacts/mechanistic/d4_j0_sae_feature_analysis_v1`
 - `artifacts/mechanistic/d4_j0_sae_merged_ontology_discovery_v1`
 - `data/derived/d4_human_llm_alignment_pairs_v1`
+- `data/derived/d4_human_llm_stage_contrast_pairs_v1`
 - `data/derived/d4_surface_counterfactual_pairs_v1`
 - `artifacts/mechanistic/d4_j0_human_llm_candidate_alignment_v1`
+- `artifacts/mechanistic/d4_hllm_stage_<model>_<mode>_v1`
+- `artifacts/mechanistic/d4_hllm_stage_tulu_stage_scout_v1`
+- `artifacts/mechanistic/d4_human_llm_stage_contrast_summary_<models>_v1`
 - `artifacts/mechanistic/d4_j0_bundle_graph_v1`
 - `artifacts/mechanistic/d4_j0_intervention_scout_v1`
 - `artifacts/mechanistic/d4_j0_surface_counterfactual_audit_v1`

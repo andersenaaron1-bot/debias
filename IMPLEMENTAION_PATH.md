@@ -370,6 +370,47 @@ Interpretation:
 - This still does not establish causality. It only selects candidates for
   counterfactual rewriting and feature intervention.
 
+### Stage 2C: Training-Stage Human-vs-LLM Contrast
+
+Goal:
+
+- test whether base-to-instruction or reward-stage training shifts
+  LLM-minus-human preference margins on the same paired corpora
+- separate checkpoint effects from chat-template elicitation
+- compare preference-style forced-choice scoring with response-likelihood
+  familiarity controls and scalar reward scoring
+- keep method-family comparisons diagnostic unless matched intermediate
+  checkpoints isolate SFT, RLHF, DPO, or related post-training steps
+
+Current implementation:
+
+- `src/aisafety/scripts/build_d4_human_llm_stage_contrast_pairs.py`
+- `src/aisafety/scripts/run_d4_human_llm_stage_contrast.py`
+- `src/aisafety/scripts/summarize_d4_human_llm_stage_contrasts.py`
+- `cluster/lrz/submit_d4_human_llm_tulu_stage_matrix.sh`
+
+Outputs:
+
+- `data/derived/d4_human_llm_stage_contrast_pairs_v1/bt_pairs.jsonl`
+- `hllm_stage_scores.csv`
+- `stage_summary.csv`
+- `stage_pair_summary_long.csv`
+- `stage_contrast_deltas.csv`
+- `stage_contrast_group_deltas.csv`
+
+Interpretation:
+
+- A positive instruction-minus-base delta supports a post-training shift in
+  LLM-over-human preference under the chosen scoring mode.
+- A response-likelihood delta is a familiarity or continuation-likelihood
+  control, not a judge-preference result.
+- A chat-template-only effect is an elicitation artifact until it survives
+  plain-prompt and scalar/independent checks.
+- Base/IT comparisons across different model families can suggest method
+  sensitivity, but they also change pretraining data, architecture, tokenizer,
+  safety policy, and release filtering. Treat those as structured
+  between-family diagnostics, not causal attribution to one RLHF method.
+
 ### Stage 3: Feature Explanation And Falsification
 
 Goal:
