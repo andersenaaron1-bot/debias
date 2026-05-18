@@ -34,6 +34,8 @@ MAX_LENGTH="${MAX_LENGTH:-2048}"
 USE_4BIT="${USE_4BIT:-0}"
 INCLUDE_META_INSTRUCT="${INCLUDE_META_INSTRUCT:-1}"
 INCLUDE_RESPONSE_LIKELIHOOD="${INCLUDE_RESPONSE_LIKELIHOOD:-0}"
+INCLUDE_FORCED_CHOICE="${INCLUDE_FORCED_CHOICE:-1}"
+SUMMARY_ONLY="${SUMMARY_ONLY:-0}"
 TULU_PROMPT_STYLE="${TULU_PROMPT_STYLE:-chat_template}"
 META_INSTRUCT_PROMPT_STYLE="${META_INSTRUCT_PROMPT_STYLE:-chat_template}"
 
@@ -61,6 +63,13 @@ echo "  pair_jsonl=$PAIR_JSONL"
 echo "  max_source_pairs=$MAX_SOURCE_PAIRS"
 echo "  gpus=$GPU_A,$GPU_B,$GPU_C"
 echo "  out_root=$OUT_ROOT"
+echo "  include_forced_choice=$INCLUDE_FORCED_CHOICE"
+echo "  include_response_likelihood=$INCLUDE_RESPONSE_LIKELIHOOD"
+
+if [[ "$INCLUDE_FORCED_CHOICE" != "1" && "$INCLUDE_RESPONSE_LIKELIHOOD" != "1" && "$SUMMARY_ONLY" != "1" ]]; then
+  echo "Nothing to run: set INCLUDE_FORCED_CHOICE=1, INCLUDE_RESPONSE_LIKELIHOOD=1, or SUMMARY_ONLY=1." >&2
+  exit 2
+fi
 
 "$PYTHON" -m aisafety.scripts.build_d4_human_llm_stage_contrast_pairs \
   --workspace-root "$WORKDIR" \
@@ -117,39 +126,45 @@ wait_wave() {
   fi
 }
 
-run_stage "llama31_base" "meta-llama/Llama-3.1-8B" "forced_choice" "plain" \
-  "$OUT_ROOT/llama31_base_forced_plain" "$SCORE_BATCH_SIZE" "$GPU_A"
-pid_base="$!"
-run_stage "tulu3_sft" "allenai/Llama-3.1-Tulu-3-8B-SFT" "forced_choice" "$TULU_PROMPT_STYLE" \
-  "$OUT_ROOT/tulu3_sft_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_B"
-pid_sft="$!"
-run_stage "tulu3_dpo" "allenai/Llama-3.1-Tulu-3-8B-DPO" "forced_choice" "$TULU_PROMPT_STYLE" \
-  "$OUT_ROOT/tulu3_dpo_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_C"
-pid_dpo="$!"
-wait_wave "$pid_base" "$pid_sft" "$pid_dpo"
+run_entries=()
 
-run_stage "tulu3_final" "allenai/Llama-3.1-Tulu-3-8B" "forced_choice" "$TULU_PROMPT_STYLE" \
-  "$OUT_ROOT/tulu3_final_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_A"
-pid_final="$!"
-wave2_pids=("$pid_final")
-if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
-  run_stage "llama31_instruct" "meta-llama/Llama-3.1-8B-Instruct" "forced_choice" "$META_INSTRUCT_PROMPT_STYLE" \
-    "$OUT_ROOT/llama31_instruct_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_B"
-  wave2_pids+=("$!")
-fi
-wait_wave "${wave2_pids[@]}"
+if [[ "$INCLUDE_FORCED_CHOICE" == "1" && "$SUMMARY_ONLY" != "1" ]]; then
+  run_stage "llama31_base" "meta-llama/Llama-3.1-8B" "forced_choice" "plain" \
+    "$OUT_ROOT/llama31_base_forced_plain" "$SCORE_BATCH_SIZE" "$GPU_A"
+  pid_base="$!"
+  run_stage "tulu3_sft" "allenai/Llama-3.1-Tulu-3-8B-SFT" "forced_choice" "$TULU_PROMPT_STYLE" \
+    "$OUT_ROOT/tulu3_sft_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_B"
+  pid_sft="$!"
+  run_stage "tulu3_dpo" "allenai/Llama-3.1-Tulu-3-8B-DPO" "forced_choice" "$TULU_PROMPT_STYLE" \
+    "$OUT_ROOT/tulu3_dpo_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_C"
+  pid_dpo="$!"
+  wait_wave "$pid_base" "$pid_sft" "$pid_dpo"
 
-run_entries=(
-  "llama31_base=$OUT_ROOT/llama31_base_forced_plain"
-  "tulu3_sft=$OUT_ROOT/tulu3_sft_forced_chat"
-  "tulu3_dpo=$OUT_ROOT/tulu3_dpo_forced_chat"
-  "tulu3_final=$OUT_ROOT/tulu3_final_forced_chat"
-)
-if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
-  run_entries+=("llama31_instruct=$OUT_ROOT/llama31_instruct_forced_chat")
+  run_stage "tulu3_final" "allenai/Llama-3.1-Tulu-3-8B" "forced_choice" "$TULU_PROMPT_STYLE" \
+    "$OUT_ROOT/tulu3_final_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_A"
+  pid_final="$!"
+  wave2_pids=("$pid_final")
+  if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
+    run_stage "llama31_instruct" "meta-llama/Llama-3.1-8B-Instruct" "forced_choice" "$META_INSTRUCT_PROMPT_STYLE" \
+      "$OUT_ROOT/llama31_instruct_forced_chat" "$SCORE_BATCH_SIZE" "$GPU_B"
+    wave2_pids+=("$!")
+  fi
+  wait_wave "${wave2_pids[@]}"
 fi
 
-if [[ "$INCLUDE_RESPONSE_LIKELIHOOD" == "1" ]]; then
+if [[ "$INCLUDE_FORCED_CHOICE" == "1" ]]; then
+  run_entries+=(
+    "llama31_base=$OUT_ROOT/llama31_base_forced_plain"
+    "tulu3_sft=$OUT_ROOT/tulu3_sft_forced_chat"
+    "tulu3_dpo=$OUT_ROOT/tulu3_dpo_forced_chat"
+    "tulu3_final=$OUT_ROOT/tulu3_final_forced_chat"
+  )
+  if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
+    run_entries+=("llama31_instruct=$OUT_ROOT/llama31_instruct_forced_chat")
+  fi
+fi
+
+if [[ "$INCLUDE_RESPONSE_LIKELIHOOD" == "1" && "$SUMMARY_ONLY" != "1" ]]; then
   run_stage "llama31_base_like" "meta-llama/Llama-3.1-8B" "response_likelihood" "plain" \
     "$OUT_ROOT/llama31_base_response_likelihood" "$LIKELIHOOD_BATCH_SIZE" "$GPU_A"
   pid_base_like="$!"
@@ -167,6 +182,11 @@ if [[ "$INCLUDE_RESPONSE_LIKELIHOOD" == "1" ]]; then
   )
 fi
 
+if [[ "${#run_entries[@]}" -eq 0 ]]; then
+  echo "No run entries available for summary. Check INCLUDE_* flags." >&2
+  exit 2
+fi
+
 summary_args=(
   "$PYTHON" -m aisafety.scripts.summarize_d4_human_llm_stage_contrasts
   --workspace-root "$WORKDIR"
@@ -174,16 +194,24 @@ summary_args=(
 for entry in "${run_entries[@]}"; do
   summary_args+=(--run "$entry")
 done
-summary_args+=(
-  --contrast "tulu3_sft_minus_base=tulu3_sft-llama31_base"
-  --contrast "tulu3_dpo_minus_sft=tulu3_dpo-tulu3_sft"
-  --contrast "tulu3_final_minus_dpo=tulu3_final-tulu3_dpo"
-  --contrast "tulu3_final_minus_base=tulu3_final-llama31_base"
-)
-if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
+if [[ "$INCLUDE_FORCED_CHOICE" == "1" ]]; then
   summary_args+=(
-    --contrast "llama31_instruct_minus_base=llama31_instruct-llama31_base"
-    --contrast "llama31_instruct_minus_tulu3_dpo=llama31_instruct-tulu3_dpo"
+    --contrast "tulu3_sft_minus_base=tulu3_sft-llama31_base"
+    --contrast "tulu3_dpo_minus_sft=tulu3_dpo-tulu3_sft"
+    --contrast "tulu3_final_minus_dpo=tulu3_final-tulu3_dpo"
+    --contrast "tulu3_final_minus_base=tulu3_final-llama31_base"
+  )
+  if [[ "$INCLUDE_META_INSTRUCT" == "1" ]]; then
+    summary_args+=(
+      --contrast "llama31_instruct_minus_base=llama31_instruct-llama31_base"
+      --contrast "llama31_instruct_minus_tulu3_dpo=llama31_instruct-tulu3_dpo"
+    )
+  fi
+fi
+if [[ "$INCLUDE_RESPONSE_LIKELIHOOD" == "1" ]]; then
+  summary_args+=(
+    --contrast "tulu3_sft_like_minus_base_like=tulu3_sft_like-llama31_base_like"
+    --contrast "tulu3_dpo_like_minus_sft_like=tulu3_dpo_like-tulu3_sft_like"
   )
 fi
 summary_args+=(--out-dir "$SUMMARY_OUT_DIR")
