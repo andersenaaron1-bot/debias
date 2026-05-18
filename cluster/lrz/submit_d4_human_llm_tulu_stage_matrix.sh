@@ -32,6 +32,7 @@ MAX_LENGTH="${MAX_LENGTH:-2048}"
 USE_4BIT="${USE_4BIT:-0}"
 INCLUDE_META_INSTRUCT="${INCLUDE_META_INSTRUCT:-1}"
 INCLUDE_RESPONSE_LIKELIHOOD="${INCLUDE_RESPONSE_LIKELIHOOD:-1}"
+COMPARISON_TEMPLATE="${COMPARISON_TEMPLATE:-standard}"
 
 mkdir -p "$LOG_DIR"
 
@@ -46,6 +47,7 @@ echo "  run_tag=$RUN_TAG"
 echo "  pair_jsonl=$PAIR_JSONL"
 echo "  max_source_pairs=$MAX_SOURCE_PAIRS"
 echo "  out_root=$OUT_ROOT"
+echo "  comparison_template=$COMPARISON_TEMPLATE"
 
 pair_job="$(
   sbatch --parsable \
@@ -92,7 +94,7 @@ submit_score() {
       --error="$LOG_DIR/%x-%j.err" \
       "${common_container_args[@]}" \
       --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN \
-      --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$BT_PAIRS_JSONL",SCORING_MODE="$scoring_mode",STAGE_LABEL="$label",MODEL_ID="$model_id",PROMPT_STYLE="$prompt_style",OUT_DIR="$out_dir",MAX_PAIRS="$SCORE_MAX_PAIRS",SCORE_BATCH_SIZE="$batch_size",MAX_LENGTH="$MAX_LENGTH",USE_4BIT="$USE_4BIT" \
+      --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",BT_PAIRS_JSONL="$BT_PAIRS_JSONL",SCORING_MODE="$scoring_mode",STAGE_LABEL="$label",MODEL_ID="$model_id",PROMPT_STYLE="$prompt_style",COMPARISON_TEMPLATE="$COMPARISON_TEMPLATE",OUT_DIR="$out_dir",MAX_PAIRS="$SCORE_MAX_PAIRS",SCORE_BATCH_SIZE="$batch_size",MAX_LENGTH="$MAX_LENGTH",USE_4BIT="$USE_4BIT" \
       cluster/lrz/d4_human_llm_stage_contrast.sbatch
   )"
   score_jobs+=("$job_id")

@@ -5,6 +5,8 @@ from pathlib import Path
 import pandas as pd
 
 from aisafety.scripts.build_d4_human_llm_stage_contrast_pairs import build_hllm_bt_rows
+from aisafety.scripts.build_d4_human_llm_surface_control_pairs import build_surface_control_pairs
+from aisafety.scripts.run_d4_human_llm_stage_contrast import _comparison_content
 from aisafety.scripts.summarize_d4_human_llm_stage_contrasts import _contrast_summary, _pair_level
 
 
@@ -128,6 +130,58 @@ class D4HumanLlmStageContrastTests(unittest.TestCase):
             loaded = _load_run("base", run_dir)
             self.assertEqual(loaded["run_label"].iloc[0], "base")
             self.assertAlmostEqual(float(loaded["llm_margin"].iloc[0]), 0.1)
+
+    def test_comparison_templates_change_instruction_surface(self) -> None:
+        row = {
+            "prompt": "How should I save money?",
+            "option_a_text": "Track expenses.",
+            "option_b_text": "Make a budget.",
+        }
+
+        standard = _comparison_content(row, comparison_template="standard")
+        minimal = _comparison_content(row, comparison_template="minimal")
+        substance = _comparison_content(row, comparison_template="substance_only")
+
+        self.assertIn("Which response is better?", standard)
+        self.assertIn("Better response?", minimal)
+        self.assertIn("Do not prefer a response because it is longer", substance)
+
+    def test_surface_control_pairs_flatten_assistant_packaging(self) -> None:
+        rows = [
+            {
+                "pair_id": "p1",
+                "source_dataset": "hc3",
+                "subset": "finance",
+                "question": "How should I save money?",
+                "human_text": (
+                    "People can save money by tracking what they spend, setting a realistic budget, "
+                    "and moving a small amount into savings each month."
+                ),
+                "llm_text": (
+                    "Answer:\n"
+                    "Saving money works best when it is routine.\n\n"
+                    "Details:\n"
+                    "- Track what you spend every week.\n"
+                    "- Set a realistic monthly budget.\n"
+                    "- Move a small amount into savings each month."
+                ),
+            }
+        ]
+
+        controlled, summary = build_surface_control_pairs(
+            rows,
+            mode="surface_minimized",
+            min_response_tokens=5,
+            min_transform_length_ratio=0.4,
+            require_changed=True,
+        )
+
+        self.assertEqual(len(controlled), 1)
+        self.assertEqual(summary["n_surface_control_pairs"], 1)
+        self.assertTrue(controlled[0]["llm_surface_changed"])
+        self.assertNotIn("Answer:", controlled[0]["llm_text"])
+        self.assertNotIn("\n", controlled[0]["llm_text"])
+        self.assertIn("surface_control_mode", controlled[0])
 
 
 if __name__ == "__main__":

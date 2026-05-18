@@ -38,6 +38,7 @@ INCLUDE_FORCED_CHOICE="${INCLUDE_FORCED_CHOICE:-1}"
 SUMMARY_ONLY="${SUMMARY_ONLY:-0}"
 TULU_PROMPT_STYLE="${TULU_PROMPT_STYLE:-chat_template}"
 META_INSTRUCT_PROMPT_STYLE="${META_INSTRUCT_PROMPT_STYLE:-chat_template}"
+COMPARISON_TEMPLATE="${COMPARISON_TEMPLATE:-standard}"
 
 mkdir -p "$LOG_DIR"
 cd "$WORKDIR"
@@ -65,6 +66,7 @@ echo "  gpus=$GPU_A,$GPU_B,$GPU_C"
 echo "  out_root=$OUT_ROOT"
 echo "  include_forced_choice=$INCLUDE_FORCED_CHOICE"
 echo "  include_response_likelihood=$INCLUDE_RESPONSE_LIKELIHOOD"
+echo "  comparison_template=$COMPARISON_TEMPLATE"
 
 if [[ "$INCLUDE_FORCED_CHOICE" != "1" && "$INCLUDE_RESPONSE_LIKELIHOOD" != "1" && "$SUMMARY_ONLY" != "1" ]]; then
   echo "Nothing to run: set INCLUDE_FORCED_CHOICE=1, INCLUDE_RESPONSE_LIKELIHOOD=1, or SUMMARY_ONLY=1." >&2
@@ -100,6 +102,7 @@ run_stage() {
       --model-id "$model_id"
       --cache-dir "$HF_HOME"
       --prompt-style "$prompt_style"
+      --comparison-template "$COMPARISON_TEMPLATE"
       --max-pairs "$SCORE_MAX_PAIRS"
       --score-batch-size "$batch_size"
       --max-length "$MAX_LENGTH"

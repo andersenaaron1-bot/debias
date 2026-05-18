@@ -79,6 +79,8 @@ def _load_run(label: str, path: Path) -> pd.DataFrame:
         df["model_id"] = ""
     if "prompt_style" not in df.columns:
         df["prompt_style"] = ""
+    if "comparison_template" not in df.columns:
+        df["comparison_template"] = ""
     if "pair_id" not in df.columns:
         df["pair_id"] = df.get("bt_pair_id", pd.Series(range(len(df)), index=df.index)).astype(str)
     if "source_dataset" not in df.columns:
@@ -99,7 +101,16 @@ def _load_run(label: str, path: Path) -> pd.DataFrame:
 
 def _pair_level(df: pd.DataFrame) -> pd.DataFrame:
     group_cols = ["run_label", "pair_id"]
-    meta_cols = ["stage_label", "scoring_mode", "model_id", "prompt_style", "source_dataset", "subset", "item_type"]
+    meta_cols = [
+        "stage_label",
+        "scoring_mode",
+        "model_id",
+        "prompt_style",
+        "comparison_template",
+        "source_dataset",
+        "subset",
+        "item_type",
+    ]
     rows = []
     for key, group in df.groupby(group_cols, sort=True):
         run_label, pair_id = key
