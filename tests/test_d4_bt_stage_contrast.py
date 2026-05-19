@@ -1,6 +1,7 @@
 import unittest
 
 from aisafety.scripts.build_d4_bt_stage_contrast_pairs import build_bt_rows
+from aisafety.scripts.run_d4_bt_stage_contrast import _comparison_user_content
 
 
 class D4BTStageContrastTests(unittest.TestCase):
@@ -55,6 +56,21 @@ class D4BTStageContrastTests(unittest.TestCase):
         self.assertEqual(rows[0]["cue_plus_source"], "base")
         self.assertEqual(rows[0]["cue_plus_option"], "A")
         self.assertIn("Key points", rows[0]["cue_plus_text"])
+
+    def test_bt_comparison_templates_change_instruction_surface(self) -> None:
+        row = {
+            "prompt": "How should I answer?",
+            "option_a_text": "Plain answer.",
+            "option_b_text": "Answer:\n- Structured answer.",
+        }
+
+        standard = _comparison_user_content(row, comparison_template="standard")
+        minimal = _comparison_user_content(row, comparison_template="minimal")
+        substance = _comparison_user_content(row, comparison_template="substance_only")
+
+        self.assertIn("Which response is better?", standard)
+        self.assertIn("Better response?", minimal)
+        self.assertIn("Do not prefer a response because it is longer", substance)
 
 
 if __name__ == "__main__":

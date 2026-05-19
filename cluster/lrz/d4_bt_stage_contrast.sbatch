@@ -16,9 +16,12 @@ CACHE_DIR="${CACHE_DIR:-$HF_HOME}"
 BT_PAIRS_JSONL="${BT_PAIRS_JSONL:-$ARTROOT/data/derived/d4_bt_stage_contrast_pairs_v1/bt_pairs.jsonl}"
 OUT_DIR="${OUT_DIR:-$ARTROOT/artifacts/mechanistic/d4_bt_stage_contrast_v1}"
 STAGE="${STAGE:-it_lm}"
+SCORING_MODE="${SCORING_MODE:-}"
+STAGE_LABEL="${STAGE_LABEL:-}"
 MODEL_ID="${MODEL_ID:-google/gemma-2-9b-it}"
 REWARD_RUN_DIR="${REWARD_RUN_DIR:-$ARTROOT/artifacts/reward/j0_anchor_v1_h100compact}"
 PROMPT_STYLE="${PROMPT_STYLE:-plain}"
+COMPARISON_TEMPLATE="${COMPARISON_TEMPLATE:-standard}"
 MAX_PAIRS="${MAX_PAIRS:-0}"
 SCORE_BATCH_SIZE="${SCORE_BATCH_SIZE:-4}"
 MAX_LENGTH="${MAX_LENGTH:-2048}"
@@ -36,15 +39,21 @@ CMD=(
   --workspace-root "$WORKDIR"
   --bt-pairs-jsonl "$BT_PAIRS_JSONL"
   --stage "$STAGE"
+  --stage-label "$STAGE_LABEL"
   --model-id "$MODEL_ID"
   --reward-run-dir "$REWARD_RUN_DIR"
   --cache-dir "$CACHE_DIR"
   --prompt-style "$PROMPT_STYLE"
+  --comparison-template "$COMPARISON_TEMPLATE"
   --max-pairs "$MAX_PAIRS"
   --score-batch-size "$SCORE_BATCH_SIZE"
   --max-length "$MAX_LENGTH"
   --out-dir "$OUT_DIR"
 )
+
+if [[ -n "$SCORING_MODE" ]]; then
+  CMD+=(--scoring-mode "$SCORING_MODE")
+fi
 
 if [[ "${USE_4BIT:-0}" == "1" ]]; then
   CMD+=(--use-4bit)
