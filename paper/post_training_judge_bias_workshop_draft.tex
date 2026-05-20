@@ -1,0 +1,322 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{natbib}
+
+\title{Post-Training Amplifies Judge Framing Sensitivity: Draft Structure and Evidence Ledger}
+\author{AISafety project draft}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Large language model (LLM) judges often favor LLM-generated or LLM-presented
+content over human-written alternatives. Existing work establishes this
+phenomenon and related judge biases, but leaves open how much of the effect is
+already present in base models and how much is introduced or amplified by
+post-training for assistant-style use. This draft note organizes a workshop
+paper around a narrower claim: base models already show substantial
+LLM-favoring behavior, but instruction/post-training amplifies and reshapes
+that behavior in binary judge settings by making models more sensitive to
+evaluation framing and answer-like or formal presentation cues. The strongest
+current evidence comes from a Tulu staged SFT/DPO ladder, Qwen 2.5 base-vs-IT
+replication, deterministic surface-cue counterfactuals, matched
+human-vs-LLM subsets, and likelihood-only negative controls. The remaining
+claim gates are uncertainty estimates and one more cross-family/scale
+replication, preferably Gemma 2 27B base/IT.
+\end{abstract}
+
+\section{Working Claim}
+
+\paragraph{Main claim.}
+Post-training does not create AI--AI or LLM-over-human preference from
+scratch. In our experiments, base models already prefer LLM-authored text in
+many paired settings. The post-training effect is better described as an
+amplification and conditionalization of this pre-existing preference:
+assistant-tuned models become more sensitive to binary judge framing and to
+surface presentations that resemble helpful, formal, answer-like assistant
+outputs.
+
+\paragraph{Claim boundary.}
+The current evidence supports a diagnostic account of judge behavior, not a
+complete causal account of all AI--AI bias. The paper should avoid claiming
+that RLHF alone explains LLM preference. It should instead claim that
+post-training changes how model judges respond to evaluation prompts and
+presentation cues, especially in forced-choice settings. Likelihood-only
+controls are crucial because they show that the main forced-choice effects are
+not simply lower perplexity or generic next-token familiarity.
+
+\section{Intended Contributions}
+
+\begin{enumerate}[leftmargin=1.5em]
+\item \textbf{Stage contrast.} Compare base and post-trained checkpoints on
+the same human-vs-LLM paired corpus, including a staged Tulu/Llama ladder
+(base, SFT, DPO, final, Llama instruct) and Qwen 2.5 base/IT replication.
+
+\item \textbf{Template interaction.} Show that post-training changes sensitivity
+to judge prompt framing. Minimal prompts often reduce or collapse effects that
+standard, rubric, or substance-only judge prompts recover.
+
+\item \textbf{Deterministic surface-cue control.} Reuse deterministic
+counterfactual pairings to test whether the same stage/template pattern appears
+for controlled presentation cues rather than direct human-vs-LLM labels.
+
+\item \textbf{Likelihood negative control.} Compare forced-choice margins with
+response-likelihood scoring. The likelihood-only deltas are consistently small
+or negative relative to forced-choice deltas.
+
+\item \textbf{Confound controls.} Use matched pair subsets controlling length,
+prompt overlap, type-token ratio, and punctuation, plus order swaps to reduce
+first-item bias.
+
+\item \textbf{Next claim gate.} Add paired bootstrap confidence intervals and a
+Gemma 2 27B base/IT family/scale replication before submission.
+\end{enumerate}
+
+\section{Current Evidence Ledger}
+
+\subsection{Human-vs-LLM Stage Contrast}
+
+The broad and matched Tulu/Llama results show that base models already favor
+LLM text, but Tulu post-training substantially increases LLM-minus-human
+forced-choice margins. On the relaxed matched set of 1,370 pairs:
+
+\begin{center}
+\small
+\begin{tabular}{lrrr}
+\toprule
+Contrast & Mean margin delta & Preference-rate movement & Interpretation \\
+\midrule
+Tulu SFT $-$ Llama base & $+0.747$ & $0.788 \to 0.885$ & Large SFT amplification \\
+Tulu DPO $-$ Tulu SFT & $+0.620$ & $0.885 \to 0.874$ & Margin increase, fewer hard flips \\
+Tulu final $-$ Llama base & $+1.279$ & $0.788 \to 0.880$ & Large full-stage effect \\
+Llama instruct $-$ Llama base & $+0.661$ & $0.788 \to 0.758$ & Margin increase without rate increase \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Likelihood-only controls on the same matched set are much smaller:
+Tulu SFT-like $-$ base-like is $+0.087$, and Tulu DPO-like $-$ SFT-like is
+$+0.178$. This suggests that the large forced-choice effect is not merely
+explained by the model assigning higher likelihood to LLM responses.
+
+\subsection{Template Sensitivity on Human-vs-LLM Pairs}
+
+Prompt templates tested so far are \texttt{minimal}, \texttt{standard},
+\texttt{rubric\_quality}, and \texttt{substance\_only}. For Tulu on the matched
+set, minimal prompts greatly reduce the base-to-SFT effect, while standard,
+rubric, and substance prompts recover large effects. The key interaction is
+that post-training itself increases template sensitivity. For
+\texttt{standard} minus \texttt{minimal}, the Tulu SFT-minus-base interaction
+is about $+0.756$, and Tulu final-minus-base is about $+1.005$.
+
+Qwen 2.5 7B replicates the human-vs-LLM template result. With chat-template
+prompting, Qwen Instruct shows a very large standard-minus-minimal interaction
+relative to Qwen base ($+2.877$). When Qwen Instruct is forced through plain
+prompting, the interaction remains large ($+1.407$), so the human-vs-LLM
+template effect is amplified by chat formatting but not caused by it.
+
+\subsection{Deterministic Surface-BT Counterfactuals}
+
+The surface-BT suite converts deterministic cue-increase/decrease
+counterfactuals into balanced binary comparisons. Axes tested:
+\texttt{answer\_likeness\_packaging},
+\texttt{formal\_institutional\_packaging}, and
+\texttt{structured\_assistant\_packaging}. The current paired set contains
+6,381 counterfactuals and 12,762 order-swapped BT rows.
+
+For Tulu, surface-BT template sensitivity is positive and selective. It is
+strongest for answer-likeness and formal/institutional packaging, holds for
+both human-origin and LLM-origin texts, and is near zero under likelihood-only
+scoring. This supports the interpretation that post-training increases
+frame-conditioned sensitivity to assistant-like presentation cues rather than
+only to the human/LLM source distinction.
+
+For Qwen 2.5, the chat-template surface-BT run initially shows a strong
+standard-minus-minimal interaction ($+0.676$), with axis-level interactions of
+$+0.778$ for answer-likeness and $+0.692$ for formal/institutional packaging.
+However, forcing Qwen Instruct to plain prompting removes the surface-BT
+template interaction ($-0.023$). This is an important qualification:
+Qwen's surface-cue template sensitivity is largely chat-template mediated,
+although Qwen Instruct still shows a plain-prompt cue-plus margin increase over
+base in both minimal ($+0.207$) and standard ($+0.184$) settings.
+
+\section{Proposed Paper Structure}
+
+\subsection{1. Introduction}
+
+State the empirical problem: LLM judges are used widely, but they can favor
+LLM-authored or LLM-presented content. Prior work establishes the phenomenon;
+this paper asks what post-training contributes. Present the refined thesis:
+base models already exhibit LLM preference, while post-training amplifies and
+reshapes that preference in binary judge settings by increasing sensitivity to
+judge framing and surface presentation cues.
+
+\subsection{2. Related Work}
+
+Organize related work around four clusters:
+
+\paragraph{LLM-as-a-judge and known biases.}
+MT-Bench and Chatbot Arena established LLM-as-a-judge as a scalable evaluation
+approach and documented position, verbosity, and self-enhancement biases
+\citep{zheng2023mtbench}. Position bias has since been studied more
+systematically across judges and tasks \citep{shi2024positionbias}.
+
+\paragraph{AI--AI bias and self-preference.}
+AI--AI bias work shows that LLM systems can prefer LLM-generated
+communications over human-authored alternatives in binary choice scenarios
+\citep{laurito2025aiaibias}. Self-preference work shows that LLM judges can
+favor their own or familiar generations and relates part of this to perplexity
+or familiarity \citep{panickssery2024selfrecognition,
+wataoka2024selfpreference}. Reward-model detection work similarly suggests
+that aligned-model generations can be recognized by evaluators
+\citep{lee2024remodetect}.
+
+\paragraph{Preference leakage and model relatedness.}
+Preference leakage studies bias arising when data generators and judges are
+related by model identity, inheritance, or family membership
+\citep{li2025preferenceleakage}. Our study is adjacent but distinct: we compare
+base and post-trained checkpoints and ask how post-training changes judge
+framing sensitivity, not only same-family preference.
+
+\paragraph{Style and surface-presentation bias.}
+Recent work emphasizes that LLM judges can be sensitive to style, formatting,
+and epistemic markers rather than solely content quality
+\citep{lee2024ember,soumik2026judging}. Our deterministic surface-BT suite
+connects this line of work to base-vs-instruct stage contrasts and
+likelihood-only controls.
+
+\subsection{3. Data and Controls}
+
+Describe HC3, HAP-E, H-LLMC2, and derived matched subsets. Explain source
+stratification, order swaps, length/lexical matching, and why scalar reward
+heads are avoided in the present paper except as background.
+
+\subsection{4. Methods}
+
+\paragraph{Forced-choice scoring.}
+Define LLM-minus-human margin from answer-token logit pooling or normalized
+binary choice probabilities. Emphasize that all results are pairwise and
+order-averaged.
+
+\paragraph{Likelihood-only scoring.}
+Define response-likelihood margin. This is the negative control for a
+perplexity/familiarity-only explanation.
+
+\paragraph{Template variants.}
+Define \texttt{minimal}, \texttt{standard}, \texttt{rubric\_quality}, and
+\texttt{substance\_only}. Treat \texttt{standard} minus \texttt{minimal} as the
+main test of judge-framing sensitivity.
+
+\paragraph{Surface-BT counterfactuals.}
+Define cue-plus/cue-minus pairs and the axes. Explain that these deterministic
+counterfactuals test presentation sensitivity beyond human-vs-LLM authorship.
+
+\subsection{5. Results}
+
+Recommended result order:
+
+\begin{enumerate}[leftmargin=1.5em]
+\item Base models already prefer LLM responses.
+\item Tulu SFT/DPO stages amplify forced-choice LLM margins.
+\item Likelihood-only deltas are much smaller.
+\item Template sensitivity is post-training dependent.
+\item Surface-BT shows selective sensitivity to answer-like/formal cues.
+\item Qwen replicates human-vs-LLM template sensitivity, but reveals that
+surface-BT template sensitivity can be chat-template mediated.
+\item Bootstrap CIs and Gemma 27B replication, once available.
+\end{enumerate}
+
+\subsection{6. Discussion}
+
+Discuss the mechanism as an interaction between pretraining priors,
+assistant-style post-training, and evaluation-prompt affordances. The central
+interpretation should be: post-training makes models better binary evaluators
+of prompts written like evaluations, but this also makes them more responsive
+to surface signals that correlate with assistant outputs.
+
+\subsection{7. Limitations}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Base preference remains substantially unexplained.
+\item Tulu gives staged SFT/DPO evidence, but Qwen and Gemma provide only
+base/IT contrasts.
+\item Surface counterfactuals are deterministic and may not cover natural
+style variation.
+\item Qwen surface-BT template sensitivity is chat-template mediated.
+\item No human reannotation yet verifies that the cue-plus variants are equal
+quality under human judgments.
+\item Bootstrap uncertainty and one more family/scale replication are still
+needed before submission.
+\end{itemize}
+
+\section{Planned Tables and Figures}
+
+\begin{enumerate}[leftmargin=1.5em]
+\item \textbf{Table 1: Human-vs-LLM stage contrast.} Rows: base, SFT, DPO,
+final, instruct; columns: margin, preference rate, likelihood control.
+\item \textbf{Table 2: Template interactions.} Rows: model family/stage
+contrast; columns: minimal, standard, standard-minus-minimal interaction.
+\item \textbf{Table 3: Surface-BT axes.} Rows: answer-likeness, formal,
+structured; columns: stage delta and template interaction by family.
+\item \textbf{Figure 1: Conceptual pipeline.} Base/IT model pair, paired
+human-vs-LLM data, template variants, forced-choice vs likelihood controls.
+\item \textbf{Figure 2: Interaction plot.} Template delta by stage for Tulu,
+Qwen, and Gemma.
+\item \textbf{Figure 3: Surface axis decomposition.} Interaction split by
+axis and source role.
+\end{enumerate}
+
+\section{Remaining Experiments Before Submission}
+
+\paragraph{Paired bootstrap.}
+Add paired bootstrap confidence intervals over pair IDs for human-vs-LLM runs
+and over counterfactual IDs for surface-BT runs. Report 95\% intervals for
+stage deltas and stage-by-template interactions.
+
+\paragraph{Gemma 2 27B base/IT.}
+Run the minimal decisive matrix first: HLLM minimal/standard with likelihood
+control, and Surface-BT minimal/standard with likelihood control. If the
+chat-template run is positive, run the plain-prompt instruct control.
+
+\paragraph{Optional size check.}
+If Gemma 27B is expensive or ambiguous, add Gemma 2 9B or Qwen 2.5 3B as a
+same-family size ablation. This is secondary to the 27B cross-family check.
+
+\paragraph{Human spot check.}
+For a small subset of surface-BT cue-plus/cue-minus pairs, ask human reviewers
+or a blind annotation protocol whether cue-plus is actually better. This is not
+required for the diagnostic claim, but would strengthen the interpretation
+that the model responds to presentation rather than genuine quality.
+
+\section{Draft Abstract Candidate}
+
+LLM-based judges are increasingly used to evaluate open-ended model outputs,
+but they can favor LLM-generated content over human-written alternatives. We
+study whether this preference is already present in base language models or is
+amplified by assistant-style post-training. Across matched human-vs-LLM pairs,
+a staged Llama/Tulu ladder, Qwen 2.5 base/IT replication, deterministic
+surface-cue counterfactuals, and likelihood-only controls, we find that base
+models already show substantial LLM preference, but post-training substantially
+increases forced-choice LLM margins and sensitivity to judge prompt framing.
+The effect is strongest under standard evaluation templates and for
+answer-like or formal presentation cues, while likelihood-only scoring shows
+much smaller shifts. Qwen replication confirms human-vs-LLM template
+sensitivity even under plain prompting, but also shows that some surface-cue
+effects are mediated by chat-template formatting. These results suggest that
+assistant post-training reshapes models into more framing-sensitive binary
+evaluators, amplifying pre-existing LLM/style preferences in common
+LLM-as-a-judge settings.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
