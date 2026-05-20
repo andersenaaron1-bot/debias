@@ -84,6 +84,18 @@ class D4BTStageTemplateSummaryTests(unittest.TestCase):
             self.assertEqual(loaded["run_label"].iloc[0], "base")
             self.assertAlmostEqual(float(loaded["cue_plus_margin"].iloc[0]), 0.25)
 
+    def test_empty_template_interactions_are_allowed_for_single_template_summary(self) -> None:
+        empty_pairs = pd.DataFrame()
+
+        interaction_pairs, interaction_summary, interaction_groups = stage_template_interaction_summary(
+            empty_pairs,
+            ["sft_minus_base=sft-base"],
+        )
+
+        self.assertTrue(interaction_pairs.empty)
+        self.assertTrue(interaction_summary.empty)
+        self.assertTrue(interaction_groups.empty)
+
 
 if __name__ == "__main__":
     unittest.main()

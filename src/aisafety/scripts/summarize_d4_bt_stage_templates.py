@@ -431,6 +431,8 @@ def stage_template_interaction_summary(template_pairs: pd.DataFrame, contrasts: 
     pair_rows: list[pd.DataFrame] = []
     rows: list[dict[str, Any]] = []
     group_rows: list[dict[str, Any]] = []
+    if template_pairs.empty or "run_label" not in template_pairs.columns:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     for raw in contrasts:
         interaction_df = _interaction_pair_frame(template_pairs, raw)
         if interaction_df.empty:
@@ -510,8 +512,16 @@ def main() -> None:
     stage_contrasts = _available_contrasts([str(item) for item in args.stage_contrast] or list(DEFAULT_STAGE_CONTRASTS), run_labels)
     template_contrasts = _available_contrasts([str(item) for item in args.template_contrast] or list(DEFAULT_TEMPLATE_CONTRASTS), template_labels)
     stage_pair_df, stage_contrast_df, stage_group_df = stage_contrast_summary(pair_df, stage_contrasts)
-    template_pair_df, template_summary_df, template_group_df = template_sensitivity_summary(pair_df, template_contrasts)
-    interaction_pair_df, interaction_summary_df, interaction_group_df = stage_template_interaction_summary(template_pair_df, stage_contrasts)
+    if template_contrasts:
+        template_pair_df, template_summary_df, template_group_df = template_sensitivity_summary(pair_df, template_contrasts)
+        interaction_pair_df, interaction_summary_df, interaction_group_df = stage_template_interaction_summary(template_pair_df, stage_contrasts)
+    else:
+        template_pair_df = pd.DataFrame()
+        template_summary_df = pd.DataFrame()
+        template_group_df = pd.DataFrame()
+        interaction_pair_df = pd.DataFrame()
+        interaction_summary_df = pd.DataFrame()
+        interaction_group_df = pd.DataFrame()
 
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs = {
