@@ -103,7 +103,10 @@ def main() -> None:
     out_csv = _resolve(workspace_root, args.out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    df = pd.read_csv(input_path)
+    try:
+        df = pd.read_csv(input_path)
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError(f"Input CSV has no columns: {input_path}") from exc
     group_cols = _group_cols(str(args.group_cols))
     required = [str(args.value_col), str(args.unit_col), *group_cols]
     missing = [col for col in required if col not in df.columns]
