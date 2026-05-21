@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the Gemma 2 27B base-vs-IT replication suite on a local GPU host.
+# Run a Gemma 2 base-vs-IT replication suite on a local GPU host.
 #
 # This wrapper is intended for an unattended overnight run. It covers the
 # decisive minimal/standard experiments for:
@@ -15,21 +15,47 @@ set -euo pipefail
 WORKDIR="${WORKDIR:-$(pwd)}"
 ARTROOT="${ARTROOT:-$WORKDIR}"
 PYTHON="${PYTHON:-python}"
-RUN_TAG="${RUN_TAG:-gemma2_27b_overnight_v1}"
+GEMMA_SIZE="${GEMMA_SIZE:-27b}"
 
-BASE_LABEL="${BASE_LABEL:-gemma2_27b_base}"
-BASE_MODEL_ID="${BASE_MODEL_ID:-google/gemma-2-27b}"
+case "$GEMMA_SIZE" in
+  9b)
+    DEFAULT_RUN_TAG="gemma2_9b_overnight_v1"
+    DEFAULT_BASE_LABEL="gemma2_9b_base"
+    DEFAULT_BASE_MODEL_ID="google/gemma-2-9b"
+    DEFAULT_INSTRUCT_LABEL="gemma2_9b_it"
+    DEFAULT_INSTRUCT_MODEL_ID="google/gemma-2-9b-it"
+    DEFAULT_GPU_A="0"
+    DEFAULT_GPU_B="1"
+    ;;
+  27b)
+    DEFAULT_RUN_TAG="gemma2_27b_overnight_v1"
+    DEFAULT_BASE_LABEL="gemma2_27b_base"
+    DEFAULT_BASE_MODEL_ID="google/gemma-2-27b"
+    DEFAULT_INSTRUCT_LABEL="gemma2_27b_it"
+    DEFAULT_INSTRUCT_MODEL_ID="google/gemma-2-27b-it"
+    DEFAULT_GPU_A="1"
+    DEFAULT_GPU_B="7"
+    ;;
+  *)
+    echo "Unsupported GEMMA_SIZE=$GEMMA_SIZE. Use 9b or 27b." >&2
+    exit 2
+    ;;
+esac
+
+RUN_TAG="${RUN_TAG:-$DEFAULT_RUN_TAG}"
+
+BASE_LABEL="${BASE_LABEL:-$DEFAULT_BASE_LABEL}"
+BASE_MODEL_ID="${BASE_MODEL_ID:-$DEFAULT_BASE_MODEL_ID}"
 BASE_PROMPT_STYLE="${BASE_PROMPT_STYLE:-plain}"
 BASE_STAGE="${BASE_STAGE:-base_lm}"
-INSTRUCT_LABEL="${INSTRUCT_LABEL:-gemma2_27b_it}"
-INSTRUCT_MODEL_ID="${INSTRUCT_MODEL_ID:-google/gemma-2-27b-it}"
+INSTRUCT_LABEL="${INSTRUCT_LABEL:-$DEFAULT_INSTRUCT_LABEL}"
+INSTRUCT_MODEL_ID="${INSTRUCT_MODEL_ID:-$DEFAULT_INSTRUCT_MODEL_ID}"
 INSTRUCT_PROMPT_STYLE="${INSTRUCT_PROMPT_STYLE:-chat_template}"
 PLAIN_INSTRUCT_PROMPT_STYLE="${PLAIN_INSTRUCT_PROMPT_STYLE:-plain}"
 INSTRUCT_STAGE="${INSTRUCT_STAGE:-it_lm}"
 
-# Gemma 27B should use the 80GB cards by default.
-GPU_A="${GPU_A:-1}"
-GPU_B="${GPU_B:-7}"
+GPU_A="${GPU_A:-$DEFAULT_GPU_A}"
+GPU_B="${GPU_B:-$DEFAULT_GPU_B}"
 
 RUN_HLLM="${RUN_HLLM:-1}"
 RUN_SURFACE_BT="${RUN_SURFACE_BT:-1}"
@@ -78,7 +104,7 @@ export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
 export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 mkdir -p "$HF_HOME" "$TRANSFORMERS_CACHE" "$HF_DATASETS_CACHE"
 
-echo "Running Gemma 2 27B overnight D4 judge-bias suite"
+echo "Running Gemma 2 $GEMMA_SIZE overnight D4 judge-bias suite"
 echo "  run_tag=$RUN_TAG"
 echo "  workdir=$WORKDIR"
 echo "  artroot=$ARTROOT"
