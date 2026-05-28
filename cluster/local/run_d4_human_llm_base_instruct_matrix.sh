@@ -38,6 +38,7 @@ INCLUDE_RESPONSE_LIKELIHOOD="${INCLUDE_RESPONSE_LIKELIHOOD:-0}"
 INCLUDE_FORCED_CHOICE="${INCLUDE_FORCED_CHOICE:-1}"
 SUMMARY_ONLY="${SUMMARY_ONLY:-0}"
 COMPARISON_TEMPLATE="${COMPARISON_TEMPLATE:-standard}"
+LABELS="${LABELS:-A,B}"
 
 mkdir -p "$LOG_DIR"
 cd "$WORKDIR"
@@ -66,6 +67,7 @@ echo "  out_root=$OUT_ROOT"
 echo "  include_forced_choice=$INCLUDE_FORCED_CHOICE"
 echo "  include_response_likelihood=$INCLUDE_RESPONSE_LIKELIHOOD"
 echo "  comparison_template=$COMPARISON_TEMPLATE"
+echo "  labels=$LABELS"
 
 if [[ "$INCLUDE_FORCED_CHOICE" != "1" && "$INCLUDE_RESPONSE_LIKELIHOOD" != "1" && "$SUMMARY_ONLY" != "1" ]]; then
   echo "Nothing to run: set INCLUDE_FORCED_CHOICE=1, INCLUDE_RESPONSE_LIKELIHOOD=1, or SUMMARY_ONLY=1." >&2
@@ -107,6 +109,7 @@ run_stage() {
       --cache-dir "$HF_HOME"
       --prompt-style "$prompt_style"
       --comparison-template "$COMPARISON_TEMPLATE"
+      --labels "$LABELS"
       --max-pairs "$SCORE_MAX_PAIRS"
       --score-batch-size "$batch_size"
       --max-length "$MAX_LENGTH"

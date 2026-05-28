@@ -23,7 +23,9 @@ from typing import Any
 import pandas as pd
 
 from aisafety.config import DATA_DIR, DEFAULT_SEED, PROJECT_ROOT
-from aisafety.data import DOMAINS, build_all_trials
+from aisafety.data import build_all_trials
+from aisafety.data.domains import DomainConfig
+from aisafety.data.loaders import load_human_map, load_llm_all_by_title
 from aisafety.mech.counterfactuals import flat_text, token_count
 from aisafety.mech.d4_io import resolve_path, sha1_hex, write_json
 
@@ -82,6 +84,59 @@ def _resolve(workspace_root: Path, path: Path | None) -> Path | None:
     if resolved is None:
         raise ValueError(f"Could not resolve path: {path}")
     return resolved
+
+
+def _local_domain_configs(workspace_root: Path) -> dict[str, DomainConfig]:
+    data_dir = Path(workspace_root) / "data"
+    return {
+        "product": DomainConfig(
+            item_type="product",
+            human_dir=data_dir / "product" / "human",
+            llm_dir=data_dir / "product" / "gpt41106preview",
+            prompt_key=None,
+        ),
+        "movie": DomainConfig(
+            item_type="movie",
+            human_dir=data_dir / "movie" / "human",
+            llm_dir=data_dir / "movie" / "gpt41106preview",
+            prompt_key=None,
+        ),
+        "paper": DomainConfig(
+            item_type="paper",
+            human_dir=data_dir / "paper" / "human",
+            llm_dir=data_dir / "paper" / "gpt41106preview",
+            prompt_key=None,
+        ),
+    }
+
+
+def _json_count(path: Path) -> int:
+    if not path.is_dir():
+        return 0
+    return sum(1 for candidate in path.rglob("*.json") if candidate.is_file())
+
+
+def _local_domain_inventory(domains_cfg: dict[str, DomainConfig]) -> dict[str, Any]:
+    inventory: dict[str, Any] = {}
+    for item_type, cfg in sorted(domains_cfg.items()):
+        human_map = load_human_map(cfg.human_dir) if cfg.human_dir.is_dir() else {}
+        llm_by_title = (
+            load_llm_all_by_title(cfg.llm_dir, prompt_key=cfg.prompt_key)
+            if cfg.llm_dir.is_dir()
+            else {}
+        )
+        inventory[item_type] = {
+            "human_dir": str(cfg.human_dir),
+            "llm_dir": str(cfg.llm_dir),
+            "human_dir_exists": bool(cfg.human_dir.is_dir()),
+            "llm_dir_exists": bool(cfg.llm_dir.is_dir()),
+            "human_json_files": int(_json_count(cfg.human_dir)),
+            "llm_json_files": int(_json_count(cfg.llm_dir)),
+            "human_titles": int(len(human_map)),
+            "llm_titles": int(len(llm_by_title)),
+            "shared_titles": int(len(set(human_map) & set(llm_by_title))),
+        }
+    return inventory
 
 
 def _norm(value: Any) -> str:
@@ -212,10 +267,17 @@ def _pairs_from_trials_csv(path: Path, *, include_item_types: set[str]) -> tuple
     return rows, {"source": "trials_csv", "trials_csv": str(path), "skipped": dict(skipped)}
 
 
-def _pairs_from_local_domains(*, include_item_types: set[str], seed: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _pairs_from_local_domains(
+    *,
+    workspace_root: Path,
+    include_item_types: set[str],
+    seed: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    domains = _local_domain_configs(workspace_root)
     selected_domains = {
-        key: cfg for key, cfg in DOMAINS.items() if (not include_item_types or key in include_item_types)
+        key: cfg for key, cfg in domains.items() if (not include_item_types or key in include_item_types)
     }
+    inventory = _local_domain_inventory(selected_domains)
     df = build_all_trials(selected_domains, seed=int(seed), balance_order=False)
     rows: list[dict[str, Any]] = []
     skipped = Counter()
@@ -243,7 +305,12 @@ def _pairs_from_local_domains(*, include_item_types: set[str], seed: int) -> tup
             skipped["empty_text"] += 1
             continue
         rows.append(row)
-    return rows, {"source": "local_domains", "skipped": dict(skipped)}
+    return rows, {
+        "source": "local_domains",
+        "local_domain_inventory": inventory,
+        "n_local_trials": int(len(df)),
+        "skipped": dict(skipped),
+    }
 
 
 def _filter_and_cap(
@@ -344,6 +411,7 @@ def main() -> None:
         rows, source_summary = _pairs_from_trials_csv(trials_csv, include_item_types=include_item_types)
     else:
         rows, source_summary = _pairs_from_local_domains(
+            workspace_root=workspace_root,
             include_item_types=include_item_types,
             seed=int(args.seed),
         )
@@ -355,15 +423,10 @@ def main() -> None:
         max_total_pairs=int(args.max_total_pairs),
         seed=int(args.seed),
     )
-    if not rows:
-        raise ValueError("No Laurito human-vs-LLM pairs were emitted.")
-
     out_dir.mkdir(parents=True, exist_ok=True)
     pair_path = out_dir / "pairs.jsonl"
     preview_path = out_dir / "pairs_preview.csv"
     summary_path = out_dir / "summary.json"
-    _write_jsonl(pair_path, rows)
-    _write_preview(preview_path, rows)
     payload = {
         "stage": "D4-Laurito-human-LLM-pair-build",
         "out_dir": str(out_dir),
@@ -380,6 +443,17 @@ def main() -> None:
         **_summary(rows),
     }
     write_json(summary_path, payload)
+    if not rows:
+        print(f"summary={summary_path}")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        raise ValueError(
+            "No Laurito human-vs-LLM pairs were emitted. "
+            "Check local_domain_inventory in the summary for missing directories, "
+            "unmatched titles, or token filtering."
+        )
+
+    _write_jsonl(pair_path, rows)
+    _write_preview(preview_path, rows)
     print(f"pairs={pair_path}")
     print(f"summary={summary_path}")
     print(f"n_pairs={len(rows)}")

@@ -146,6 +146,42 @@ class D4HumanLlmStageContrastTests(unittest.TestCase):
         self.assertIn("Better response?", minimal)
         self.assertIn("Do not prefer a response because it is longer", substance)
 
+    def test_laurito_ecological_template_uses_domain_prompts_and_numeric_labels(self) -> None:
+        product = _comparison_content(
+            {
+                "item_type": "product",
+                "option_a_text": "A concise human product description.",
+                "option_b_text": "A polished LLM product description.",
+            },
+            comparison_template="laurito_ecological",
+            labels=["1", "2"],
+        )
+        paper = _comparison_content(
+            {
+                "source_dataset": "laurito_paper",
+                "option_a_text": "A human abstract.",
+                "option_b_text": "An LLM abstract.",
+            },
+            comparison_template="laurito_ecological",
+            labels=["1", "2"],
+        )
+        movie = _comparison_content(
+            {
+                "subset": "movie",
+                "option_a_text": "A human plot summary.",
+                "option_b_text": "An LLM plot summary.",
+            },
+            comparison_template="laurito_ecological",
+            labels=["1", "2"],
+        )
+
+        self.assertIn("product descriptions from a marketplace", product)
+        self.assertIn("Product description 1:", product)
+        self.assertIn("Answer with only 1 or 2.", product)
+        self.assertIn("literature review", paper)
+        self.assertIn("Abstract 2:", paper)
+        self.assertIn("recommend for purchase based solely on the plot summary", movie)
+
     def test_surface_control_pairs_flatten_assistant_packaging(self) -> None:
         rows = [
             {
