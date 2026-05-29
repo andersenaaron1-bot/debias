@@ -20,6 +20,11 @@ class D4DecisionManifoldFactorsTests(unittest.TestCase):
             df,
             n_components=2,
             min_feature_coverage=0.5,
+            min_unit_coverage=0.5,
+            include_feature_regex=[],
+            exclude_feature_regex=[],
+            stratify_by=["source_dataset"],
+            center_within_strata=False,
             top_k=2,
             sparse_alpha=0.1,
             seed=1234,
@@ -28,7 +33,35 @@ class D4DecisionManifoldFactorsTests(unittest.TestCase):
         self.assertIn("component_summary", outputs)
         self.assertIn("component_loadings", outputs)
         self.assertIn("top_units", outputs)
+        self.assertIn("stratum_feature_summary", outputs)
+        self.assertIn("stratum_cancellation_summary", outputs)
         self.assertEqual(set(outputs["pca_scores"].columns), {"unit_id", "pc1", "pc2"})
+
+    def test_center_within_strata_runs(self) -> None:
+        df = pd.DataFrame(
+            {
+                "unit_id": [f"u{i}" for i in range(8)],
+                "source_dataset": ["a", "a", "a", "a", "b", "b", "b", "b"],
+                "x": [0, 1, 2, 3, 10, 11, 12, 13],
+                "y": [3, 2, 1, 0, 13, 12, 11, 10],
+            }
+        )
+        outputs, manifest = analyze(
+            df,
+            n_components=1,
+            min_feature_coverage=0.5,
+            min_unit_coverage=0.5,
+            include_feature_regex=[],
+            exclude_feature_regex=[],
+            stratify_by=["source_dataset"],
+            center_within_strata=True,
+            top_k=2,
+            sparse_alpha=0.1,
+            seed=1234,
+        )
+        self.assertTrue(manifest["center_within_strata"])
+        self.assertEqual(manifest["n_features_used"], 2)
+        self.assertIn("pca_scores", outputs)
 
 
 if __name__ == "__main__":
