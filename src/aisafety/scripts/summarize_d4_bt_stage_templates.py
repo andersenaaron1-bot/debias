@@ -180,6 +180,7 @@ def _stage_summary(pair_df: pd.DataFrame) -> pd.DataFrame:
             ("axis", ["axis"]),
             ("axis_direction", ["axis", "direction"]),
             ("axis_role", ["axis", "role"]),
+            ("transform_id", ["transform_id"]),
             ("role", ["role"]),
             ("source_dataset", ["source_dataset"]),
             ("source_axis", ["source_dataset", "axis"]),
@@ -249,7 +250,7 @@ def stage_contrast_summary(pair_df: pd.DataFrame, contrasts: list[str]) -> tuple
             right_df = template_df[template_df["run_label"].astype(str) == right].copy()
             if left_df.empty or right_df.empty:
                 continue
-            keep = ["template_label", "counterfactual_id", "mean_cue_plus_margin", "cue_plus_preferred", "axis", "direction", "role", "source_dataset", "subset", "item_type"]
+            keep = ["template_label", "counterfactual_id", "mean_cue_plus_margin", "cue_plus_preferred", "axis", "direction", "role", "source_dataset", "subset", "item_type", "transform_id"]
             merged = left_df[keep].merge(
                 right_df[keep],
                 on=["template_label", "counterfactual_id"],
@@ -275,6 +276,7 @@ def stage_contrast_summary(pair_df: pd.DataFrame, contrasts: list[str]) -> tuple
                 ("axis", ["axis_left"]),
                 ("axis_direction", ["axis_left", "direction_left"]),
                 ("axis_role", ["axis_left", "role_left"]),
+                ("transform_id", ["transform_id_left"]),
                 ("role", ["role_left"]),
                 ("source_dataset", ["source_dataset_left"]),
                 ("source_axis", ["source_dataset_left", "axis_left"]),
