@@ -12,6 +12,7 @@ STYLE_PAIR_OUT_DIR="${STYLE_PAIR_OUT_DIR:-$ARTROOT/data/derived/d4_assistant_sty
 COUNTERFACTUAL_OUT_DIR="${COUNTERFACTUAL_OUT_DIR:-$ARTROOT/data/derived/d4_assistant_style_generated_counterfactual_pairs_v1}"
 GENERATOR_MODEL="${GENERATOR_MODEL:-openai/gpt-4.1-mini}"
 NUM_SEEDS="${NUM_SEEDS:-300}"
+SEED_POOL_SIZE="${SEED_POOL_SIZE:-$((NUM_SEEDS * 2))}"
 MAX_TOKENS="${MAX_TOKENS:-512}"
 OVERWRITE="${OVERWRITE:-0}"
 
@@ -27,7 +28,7 @@ fi
   --workspace-root "$WORKDIR" \
   --pair-jsonl "$PAIR_JSONL" \
   --out-dir "$SEED_OUT_DIR" \
-  --max-seeds "$NUM_SEEDS"
+  --max-seeds "$SEED_POOL_SIZE"
 
 generator_args=(
   "$PYTHON" -m aisafety.scripts.build_openrouter_style_pairs
