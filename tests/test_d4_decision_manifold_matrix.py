@@ -37,6 +37,26 @@ class D4DecisionManifoldMatrixTests(unittest.TestCase):
             pd.DataFrame(
                 [
                     {
+                        "pair_id": "source_pair",
+                        "counterfactual_id": "cf1",
+                        "template_label": "minimal",
+                        "run_label": "base",
+                        "mean_cue_plus_margin": 0.3,
+                        "axis": "answer_likeness_packaging",
+                    },
+                    {
+                        "pair_id": "source_pair",
+                        "counterfactual_id": "cf2",
+                        "template_label": "minimal",
+                        "run_label": "base",
+                        "mean_cue_plus_margin": -0.2,
+                        "axis": "formal_institutional_packaging",
+                    },
+                ]
+            ).to_csv(template_dir / "bt_pair_summary_long.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
                         "run_label": "sft",
                         "pair_id": "p1",
                         "template_contrast": "standard_minus_minimal",
@@ -61,18 +81,27 @@ class D4DecisionManifoldMatrixTests(unittest.TestCase):
                 prefix_input=False,
             )
 
-            self.assertEqual(manifest["n_units"], 1)
+            self.assertEqual(manifest["n_units"], 3)
             self.assertIn("stage_in__hllm_margin__base", set(long_df["feature_name"]))
             self.assertIn("stage_in__hllm_stage_delta__sft_minus_base", set(long_df["feature_name"]))
             self.assertIn(
                 "template_in__hllm_stage_template_interaction__sft_minus_base__standard_minus_minimal",
                 set(long_df["feature_name"]),
             )
+            self.assertEqual(
+                set(
+                    long_df[
+                        long_df["feature_name"]
+                        == "template_in__surface_cue_margin__minimal__base"
+                    ]["unit_id"]
+                ),
+                {"cf1", "cf2"},
+            )
             stage_delta = long_df[
                 long_df["feature_name"] == "stage_in__hllm_stage_delta__sft_minus_base"
             ]["feature_value"].iloc[0]
             self.assertAlmostEqual(float(stage_delta), 0.5)
-            self.assertEqual(len(wide_df), 1)
+            self.assertEqual(len(wide_df), 3)
             self.assertGreaterEqual(len(summary_df), 4)
 
 

@@ -147,8 +147,9 @@ def _append_rows(
     value_col: str,
     feature_parts: tuple[str, ...],
     dynamic_cols: tuple[str, ...] = (),
+    unit_override: str | None = None,
 ) -> None:
-    unit = _unit_col(df)
+    unit = unit_override if unit_override in df.columns else _unit_col(df)
     if unit is None or value_col not in df.columns:
         return
     value = pd.to_numeric(df[value_col], errors="coerce")
@@ -267,6 +268,7 @@ def _add_bt_pair_rows(
         value_col="mean_cue_plus_margin",
         feature_parts=(),
         dynamic_cols=dynamic,
+        unit_override="counterfactual_id",
     )
 
 
