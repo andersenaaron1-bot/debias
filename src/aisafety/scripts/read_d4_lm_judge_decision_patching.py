@@ -91,8 +91,16 @@ def readout(root: Path, *, top_k: int) -> None:
                 suppression["mean_margin_change"],
                 suppression["mean_neutral_margin"] - suppression["mean_observed_margin"],
             )
+            suppression["preference_rate_change"] = (
+                suppression["mean_suppressed_preferred"] - suppression["mean_observed_preferred"]
+            )
+            suppression["sort_score"] = suppression["aggregate_attenuation"]
+            undefined_attenuation = suppression["sort_score"].isna()
+            suppression.loc[undefined_attenuation, "sort_score"] = suppression.loc[
+                undefined_attenuation, "mean_margin_change"
+            ].abs()
             suppression = suppression.sort_values(
-                ["dataset", "basis_eval_split", "aggregate_attenuation"],
+                ["dataset", "basis_eval_split", "sort_score"],
                 ascending=[True, True, False],
             )
             suppression = suppression.groupby(["dataset", "basis_eval_split"], sort=True).head(4)
@@ -111,6 +119,7 @@ def readout(root: Path, *, top_k: int) -> None:
                 "mean_margin_change",
                 "mean_observed_preferred",
                 "mean_suppressed_preferred",
+                "preference_rate_change",
                 "aggregate_attenuation",
             ],
         )
