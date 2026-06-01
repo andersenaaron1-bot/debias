@@ -116,6 +116,12 @@ def _named_path(value: str) -> tuple[str, Path]:
     return name.strip(), Path(path.strip())
 
 
+def _reuse_fit_probe_for_eval(dataset: str, fit_name: str) -> bool:
+    """Evaluate the fit probe on its own rows so fit/held-out labels are valid."""
+
+    return str(dataset) == str(fit_name)
+
+
 def _cap_bt_rows(rows: list[dict[str, Any]], *, max_counterfactuals: int, seed: int, salt: str) -> list[dict[str, Any]]:
     rows = [row for row in rows if str(row.get("counterfactual_id") or "") and str(row.get("bt_pair_id") or "")]
     counterfactual_ids = sorted(
@@ -989,7 +995,7 @@ def main() -> None:
     eval_cache: dict[str, StateCache] = {}
     for dataset, records in eval_records.items():
         print(f"Collecting evaluation states: dataset={dataset} rows={len(records)}")
-        if dataset == fit_name and [record.bt_pair_id for record in records] == [record.bt_pair_id for record in fit_records]:
+        if _reuse_fit_probe_for_eval(dataset, fit_name):
             eval_cache[dataset] = fit_cache
         else:
             eval_cache[dataset] = _collect_states(

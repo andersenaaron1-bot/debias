@@ -16,6 +16,7 @@ from aisafety.scripts.run_d4_lm_judge_decision_patching import (
     _heldout_component_recovery,
     _neutral_row,
     _prompt_record,
+    _reuse_fit_probe_for_eval,
 )
 
 
@@ -115,6 +116,10 @@ class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
             verify_indices=[1, 2],
         )
         self.assertTrue(np.allclose(values, np.asarray([0.5, 0.5])))
+
+    def test_fit_probe_reuses_its_sample_for_eval_reporting(self) -> None:
+        self.assertTrue(_reuse_fit_probe_for_eval("generated", "generated"))
+        self.assertFalse(_reuse_fit_probe_for_eval("atomic", "generated"))
 
 
 if __name__ == "__main__":
