@@ -21,6 +21,8 @@ MAX_LENGTH="${MAX_LENGTH:-3072}"
 PATCH_BATCH_SIZE="${PATCH_BATCH_SIZE:-1}"
 PATCH_FIT_FRAC="${PATCH_FIT_FRAC:-0.5}"
 CONTROL_REPEATS="${CONTROL_REPEATS:-5}"
+RANKS="${RANKS:-1 2 3 5 8}"
+ALPHAS="${ALPHAS:-0.25 0.5 0.75}"
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 
 cd "$WORKDIR"
@@ -93,10 +95,10 @@ echo "  out_root=$OUT_ROOT"
 echo "  gpu=$GPU"
 echo "  layers=$SELECTED_LAYERS"
 
-for rank in 1 2 3 5 8; do
+for rank in $RANKS; do
   run_setting "fitted_rank${rank}_alpha1" "$rank" "1.0" fitted 1234
 done
-for alpha in 0.25 0.5 0.75; do
+for alpha in $ALPHAS; do
   label="${alpha/./p}"
   run_setting "fitted_rank3_alpha${label}" 3 "$alpha" fitted 1234
 done

@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+import pandas as pd
 import torch
 
 from aisafety.mech.decision_patching import (
@@ -19,6 +20,7 @@ from aisafety.scripts.run_d4_lm_judge_decision_patching import (
     _prompt_record,
     _reuse_fit_probe_for_eval,
 )
+from aisafety.scripts.read_d4_lm_judge_suppression_controls import _safe_ratio
 
 
 class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
@@ -131,6 +133,14 @@ class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
         self.assertEqual(fitted.shape, (2, 3))
         self.assertEqual(random.shape, (2, 3))
         self.assertEqual(shuffled.shape, (2, 3))
+
+    def test_suppression_readout_leaves_undefined_attenuation_blank(self) -> None:
+        values = _safe_ratio(
+            pd.Series([1.0, 1.0]),
+            pd.Series([2.0, 0.0]),
+        )
+        self.assertEqual(float(values.iloc[0]), 0.5)
+        self.assertTrue(np.isnan(values.iloc[1]))
 
 
 if __name__ == "__main__":

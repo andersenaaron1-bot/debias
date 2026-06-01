@@ -20,6 +20,20 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _safe_ratio(numerator: pd.Series, denominator: pd.Series, *, eps: float = 1e-8) -> pd.Series:
+    numerator_values = pd.to_numeric(numerator, errors="coerce").to_numpy(dtype=float)
+    denominator_values = pd.to_numeric(denominator, errors="coerce").to_numpy(dtype=float)
+    return pd.Series(
+        np.divide(
+            numerator_values,
+            denominator_values,
+            out=np.full_like(numerator_values, np.nan, dtype=float),
+            where=np.abs(denominator_values) > float(eps),
+        ),
+        index=numerator.index,
+    )
+
+
 def _rows(root: Path, *, hidden_layer: int) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for run_dir in sorted(path for path in Path(root).iterdir() if path.is_dir() and path.name != "logs"):
@@ -34,8 +48,9 @@ def _rows(root: Path, *, hidden_layer: int) -> pd.DataFrame:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         frame["setting"] = run_dir.name
         frame["basis_control_seed"] = int(manifest.get("basis_control_seed", 0))
-        frame["aggregate_attenuation"] = np.divide(
-            frame["mean_suppressed_margin"] - frame["mean_observed_margin"],
+        frame["mean_margin_change"] = frame["mean_suppressed_margin"] - frame["mean_observed_margin"]
+        frame["aggregate_attenuation"] = _safe_ratio(
+            frame["mean_margin_change"],
             frame["mean_neutral_margin"] - frame["mean_observed_margin"],
         )
         frame["preference_rate_change"] = frame["mean_suppressed_preferred"] - frame["mean_observed_preferred"]
@@ -60,6 +75,7 @@ def readout(root: Path, *, hidden_layer: int) -> None:
         "n_counterfactuals",
         "mean_observed_margin",
         "mean_suppressed_margin",
+        "mean_margin_change",
         "aggregate_attenuation",
         "mean_observed_preferred",
         "mean_suppressed_preferred",
@@ -75,6 +91,8 @@ def readout(root: Path, *, hidden_layer: int) -> None:
         controls.groupby(["basis_control", "dataset", "basis_eval_split", "subspace_rank", "suppression_alpha"], sort=True)
         .agg(
             n_runs=("setting", "count"),
+            mean_margin_change=("mean_margin_change", "mean"),
+            std_margin_change=("mean_margin_change", "std"),
             mean_attenuation=("aggregate_attenuation", "mean"),
             std_attenuation=("aggregate_attenuation", "std"),
             mean_preference_rate_change=("preference_rate_change", "mean"),

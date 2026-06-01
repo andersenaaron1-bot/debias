@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -31,6 +32,20 @@ def _print(df: pd.DataFrame, cols: list[str], *, empty: str = "(empty)") -> None
     print(df[[col for col in cols if col in df.columns]].to_string(index=False))
 
 
+def _safe_ratio(numerator: pd.Series, denominator: pd.Series, *, eps: float = 1e-8) -> pd.Series:
+    numerator_values = pd.to_numeric(numerator, errors="coerce").to_numpy(dtype=float)
+    denominator_values = pd.to_numeric(denominator, errors="coerce").to_numpy(dtype=float)
+    return pd.Series(
+        np.divide(
+            numerator_values,
+            denominator_values,
+            out=np.full_like(numerator_values, np.nan, dtype=float),
+            where=np.abs(denominator_values) > float(eps),
+        ),
+        index=numerator.index,
+    )
+
+
 def readout(root: Path, *, top_k: int) -> None:
     root = Path(root)
     run_dirs = sorted(path for path in root.iterdir() if path.is_dir() and path.name != "logs")
@@ -44,9 +59,9 @@ def readout(root: Path, *, top_k: int) -> None:
         print("\n=== Best decision-state residual patches ===")
         if not residual.empty:
             residual = residual.copy()
-            residual["aggregate_recovery"] = (
-                (residual["mean_patched_margin"] - residual["mean_neutral_margin"])
-                / (residual["mean_observed_margin"] - residual["mean_neutral_margin"])
+            residual["aggregate_recovery"] = _safe_ratio(
+                residual["mean_patched_margin"] - residual["mean_neutral_margin"],
+                residual["mean_observed_margin"] - residual["mean_neutral_margin"],
             )
             residual = residual.sort_values(
                 ["dataset", "basis_eval_split", "patch_type", "aggregate_recovery"],
@@ -71,9 +86,10 @@ def readout(root: Path, *, top_k: int) -> None:
         print("\n=== Best low-rank suppression layers ===")
         if not suppression.empty:
             suppression = suppression.copy()
-            suppression["aggregate_attenuation"] = (
-                (suppression["mean_suppressed_margin"] - suppression["mean_observed_margin"])
-                / (suppression["mean_neutral_margin"] - suppression["mean_observed_margin"])
+            suppression["mean_margin_change"] = suppression["mean_suppressed_margin"] - suppression["mean_observed_margin"]
+            suppression["aggregate_attenuation"] = _safe_ratio(
+                suppression["mean_margin_change"],
+                suppression["mean_neutral_margin"] - suppression["mean_observed_margin"],
             )
             suppression = suppression.sort_values(
                 ["dataset", "basis_eval_split", "aggregate_attenuation"],
@@ -92,6 +108,7 @@ def readout(root: Path, *, top_k: int) -> None:
                 "n_counterfactuals",
                 "mean_observed_margin",
                 "mean_suppressed_margin",
+                "mean_margin_change",
                 "mean_observed_preferred",
                 "mean_suppressed_preferred",
                 "aggregate_attenuation",
