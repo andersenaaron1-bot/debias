@@ -85,12 +85,15 @@ def readout(root: Path, *, top_k: int) -> None:
             [
                 "dataset",
                 "basis_eval_split",
+                "basis_control",
                 "hidden_layer",
                 "subspace_rank",
                 "suppression_alpha",
                 "n_counterfactuals",
                 "mean_observed_margin",
                 "mean_suppressed_margin",
+                "mean_observed_preferred",
+                "mean_suppressed_preferred",
                 "aggregate_attenuation",
             ],
         )

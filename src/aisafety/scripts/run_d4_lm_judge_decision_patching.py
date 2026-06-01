@@ -92,6 +92,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--fit-frac", type=float, default=0.5)
     parser.add_argument("--subspace-rank", type=int, default=3)
     parser.add_argument("--suppression-alpha", type=float, default=1.0)
+    parser.add_argument("--basis-control", choices=["fitted", "random", "shuffled_pair"], default="fitted")
+    parser.add_argument("--basis-control-seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--skip-residual-patches", action="store_true")
     parser.add_argument("--component-max-counterfactuals", type=int, default=32)
     parser.add_argument("--component-verify-top-k", type=int, default=12)
     parser.add_argument("--skip-component-scout", action="store_true")
@@ -478,6 +481,8 @@ def _detail_metadata(records: list[PromptRecord]) -> pd.DataFrame:
 
 
 def _counterfactual_summary(detail: pd.DataFrame, *, value_cols: list[str], group_cols: list[str]) -> pd.DataFrame:
+    if detail.empty:
+        return pd.DataFrame(columns=[*group_cols, "n_counterfactuals", *[f"mean_{col}" for col in value_cols]])
     order_level = detail.groupby([*group_cols, "counterfactual_id"], sort=True)[value_cols].mean().reset_index()
     rows: list[dict[str, Any]] = []
     for key, group in order_level.groupby(group_cols, sort=True):
@@ -489,6 +494,34 @@ def _counterfactual_summary(detail: pd.DataFrame, *, value_cols: list[str], grou
             row[f"mean_{col}"] = float(pd.to_numeric(group[col], errors="coerce").mean())
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def _fit_suppression_basis(
+    observed: np.ndarray,
+    neutral: np.ndarray,
+    *,
+    rank: int,
+    basis_control: str,
+    seed: int,
+) -> np.ndarray:
+    """Fit the requested style basis or a matched-rank control basis."""
+
+    observed = np.asarray(observed, dtype=np.float32)
+    neutral = np.asarray(neutral, dtype=np.float32)
+    if observed.shape != neutral.shape or observed.ndim != 2:
+        raise ValueError("observed and neutral states must share shape [n_rows, hidden_size].")
+    control = str(basis_control)
+    if control == "fitted":
+        deltas = observed - neutral
+    elif control == "shuffled_pair":
+        rng = np.random.default_rng(int(seed))
+        deltas = observed - neutral[rng.permutation(len(neutral))]
+    elif control == "random":
+        rng = np.random.default_rng(int(seed))
+        deltas = rng.normal(size=(max(int(rank), 1), observed.shape[-1])).astype(np.float32)
+    else:
+        raise ValueError(f"Unsupported basis control: {basis_control}")
+    return fit_low_rank_basis(deltas, rank=int(rank))
 
 
 def _heldout_component_recovery(
@@ -517,6 +550,9 @@ def _run_residual_and_suppression(
     fit_frac: float,
     rank: int,
     alpha: float,
+    basis_control: str,
+    basis_control_seed: int,
+    skip_residual_patches: bool,
     batch_size: int,
     max_length: int,
     seed: int,
@@ -537,8 +573,13 @@ def _run_residual_and_suppression(
     bases: dict[str, np.ndarray] = {}
     for layer in selected_layers:
         layer_module = find_decoder_layer_module(model, hidden_layer=int(layer))
-        fit_deltas = fit_cache.observed_decision[int(layer)][fit_mask] - fit_cache.neutral_decision[int(layer)][fit_mask]
-        basis = fit_low_rank_basis(fit_deltas, rank=int(rank))
+        basis = _fit_suppression_basis(
+            fit_cache.observed_decision[int(layer)][fit_mask],
+            fit_cache.neutral_decision[int(layer)][fit_mask],
+            rank=int(rank),
+            basis_control=str(basis_control),
+            seed=int(basis_control_seed) + int(layer),
+        )
         center = fit_cache.neutral_decision[int(layer)][fit_mask].mean(axis=0).astype(np.float32)
         bases[f"hidden_{int(layer)}_basis"] = basis
         bases[f"hidden_{int(layer)}_neutral_center"] = center
@@ -550,33 +591,34 @@ def _run_residual_and_suppression(
                 else "transfer"
                 for record in cache.records
             ]
-            for patch_type, replacements, span_patch in (
-                ("residual_decision", cache.observed_decision[int(layer)], False),
-                ("answer_span_pooled", cache.observed_span[int(layer)], True),
-            ):
-                patched = _score_decoder_edit(
-                    model=model,
-                    tokenizer=tokenizer,
-                    records=cache.records,
-                    layer_module=layer_module,
-                    prompt_kind="neutral",
-                    label_ids=label_ids,
-                    replacements=replacements,
-                    span_patch=span_patch,
-                    basis_rows=None,
-                    center=None,
-                    alpha=float(alpha),
-                    batch_size=int(batch_size),
-                    max_length=int(max_length),
-                )
-                detail = metadata.copy()
-                detail["hidden_layer"] = int(layer)
-                detail["patch_type"] = patch_type
-                detail["observed_margin"] = cache.observed_margin
-                detail["neutral_margin"] = cache.neutral_margin
-                detail["patched_margin"] = patched
-                detail["normalized_recovery"] = normalized_recovery(patched, cache.observed_margin, cache.neutral_margin)
-                patch_frames.append(detail)
+            if not bool(skip_residual_patches):
+                for patch_type, replacements, span_patch in (
+                    ("residual_decision", cache.observed_decision[int(layer)], False),
+                    ("answer_span_pooled", cache.observed_span[int(layer)], True),
+                ):
+                    patched = _score_decoder_edit(
+                        model=model,
+                        tokenizer=tokenizer,
+                        records=cache.records,
+                        layer_module=layer_module,
+                        prompt_kind="neutral",
+                        label_ids=label_ids,
+                        replacements=replacements,
+                        span_patch=span_patch,
+                        basis_rows=None,
+                        center=None,
+                        alpha=float(alpha),
+                        batch_size=int(batch_size),
+                        max_length=int(max_length),
+                    )
+                    detail = metadata.copy()
+                    detail["hidden_layer"] = int(layer)
+                    detail["patch_type"] = patch_type
+                    detail["observed_margin"] = cache.observed_margin
+                    detail["neutral_margin"] = cache.neutral_margin
+                    detail["patched_margin"] = patched
+                    detail["normalized_recovery"] = normalized_recovery(patched, cache.observed_margin, cache.neutral_margin)
+                    patch_frames.append(detail)
             suppressed = _score_decoder_edit(
                 model=model,
                 tokenizer=tokenizer,
@@ -596,9 +638,12 @@ def _run_residual_and_suppression(
             detail["hidden_layer"] = int(layer)
             detail["subspace_rank"] = int(basis.shape[0])
             detail["suppression_alpha"] = float(alpha)
+            detail["basis_control"] = str(basis_control)
             detail["observed_margin"] = cache.observed_margin
             detail["neutral_margin"] = cache.neutral_margin
             detail["suppressed_margin"] = suppressed
+            detail["observed_preferred"] = (detail["observed_margin"] > 0.0).astype(float)
+            detail["suppressed_preferred"] = (detail["suppressed_margin"] > 0.0).astype(float)
             detail["attenuation_toward_neutral"] = normalized_recovery(
                 suppressed,
                 cache.neutral_margin,
@@ -614,8 +659,15 @@ def _run_residual_and_suppression(
     )
     suppress_summary = _counterfactual_summary(
         suppress_detail,
-        value_cols=["observed_margin", "neutral_margin", "suppressed_margin", "attenuation_toward_neutral"],
-        group_cols=["dataset", "basis_eval_split", "hidden_layer", "subspace_rank", "suppression_alpha"],
+        value_cols=[
+            "observed_margin",
+            "neutral_margin",
+            "suppressed_margin",
+            "attenuation_toward_neutral",
+            "observed_preferred",
+            "suppressed_preferred",
+        ],
+        group_cols=["dataset", "basis_eval_split", "basis_control", "hidden_layer", "subspace_rank", "suppression_alpha"],
     )
     return patch_detail, patch_summary, suppress_detail, suppress_summary, bases
 
@@ -1017,6 +1069,9 @@ def main() -> None:
         fit_frac=float(args.fit_frac),
         rank=int(args.subspace_rank),
         alpha=float(args.suppression_alpha),
+        basis_control=str(args.basis_control),
+        basis_control_seed=int(args.basis_control_seed),
+        skip_residual_patches=bool(args.skip_residual_patches),
         batch_size=int(args.batch_size),
         max_length=int(args.max_length),
         seed=int(args.seed),
@@ -1063,6 +1118,9 @@ def main() -> None:
             "labels": labels,
             "subspace_rank": int(args.subspace_rank),
             "suppression_alpha": float(args.suppression_alpha),
+            "basis_control": str(args.basis_control),
+            "basis_control_seed": int(args.basis_control_seed),
+            "skip_residual_patches": bool(args.skip_residual_patches),
             "fit_frac": float(args.fit_frac),
             "component_scout": not bool(args.skip_component_scout),
             "component_attribution_method": "first_order_activation_delta_dot_gradient_prefilter_then_verified_patch",

@@ -34,6 +34,10 @@ SUPPRESSION_ALPHA="${SUPPRESSION_ALPHA:-1.0}"
 COMPONENT_MAX_COUNTERFACTUALS="${COMPONENT_MAX_COUNTERFACTUALS:-32}"
 COMPONENT_VERIFY_TOP_K="${COMPONENT_VERIFY_TOP_K:-12}"
 SKIP_COMPONENT_SCOUT="${SKIP_COMPONENT_SCOUT:-0}"
+SKIP_RESIDUAL_PATCHES="${SKIP_RESIDUAL_PATCHES:-0}"
+BASIS_CONTROL="${BASIS_CONTROL:-fitted}"
+BASIS_CONTROL_SEED="${BASIS_CONTROL_SEED:-1234}"
+EXTRA_EVAL_SPECS="${EXTRA_EVAL_SPECS:-}"
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 
 cd "$WORKDIR"
@@ -45,9 +49,9 @@ export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 mkdir -p "$HF_HOME" "$TRANSFORMERS_CACHE" "$HF_DATASETS_CACHE" "$LOG_DIR"
 
 declare -A BT_FILES
-BT_FILES[generated]="$STYLE_CAUSALITY_ROOT/generated/bt_pairs/bt_pairs.jsonl"
-BT_FILES[atomic]="$STYLE_CAUSALITY_ROOT/atomic/bt_pairs/bt_pairs.jsonl"
-BT_FILES[composite]="$STYLE_CAUSALITY_ROOT/composite/bt_pairs/bt_pairs.jsonl"
+BT_FILES[generated]="${BT_GENERATED:-$STYLE_CAUSALITY_ROOT/generated/bt_pairs/bt_pairs.jsonl}"
+BT_FILES[atomic]="${BT_ATOMIC:-$STYLE_CAUSALITY_ROOT/atomic/bt_pairs/bt_pairs.jsonl}"
+BT_FILES[composite]="${BT_COMPOSITE:-$STYLE_CAUSALITY_ROOT/composite/bt_pairs/bt_pairs.jsonl}"
 
 if [[ ! -s "${BT_FILES[$FIT_DATASET]:-}" ]]; then
   echo "Missing fit probe BT file: dataset=$FIT_DATASET path=${BT_FILES[$FIT_DATASET]:-unset}" >&2
@@ -61,6 +65,14 @@ for dataset in generated atomic composite; do
     eval_args+=(--eval "$dataset=${BT_FILES[$dataset]}")
   fi
 done
+if [[ -n "$EXTRA_EVAL_SPECS" ]]; then
+  IFS='|' read -r -a extra_specs <<< "$EXTRA_EVAL_SPECS"
+  for spec in "${extra_specs[@]}"; do
+    if [[ -n "$spec" ]]; then
+      eval_args+=(--eval "$spec")
+    fi
+  done
+fi
 
 run_model() {
   local label="$1"
@@ -94,6 +106,8 @@ run_model() {
       --fit-frac "$PATCH_FIT_FRAC"
       --subspace-rank "$SUBSPACE_RANK"
       --suppression-alpha "$SUPPRESSION_ALPHA"
+      --basis-control "$BASIS_CONTROL"
+      --basis-control-seed "$BASIS_CONTROL_SEED"
       --component-max-counterfactuals "$COMPONENT_MAX_COUNTERFACTUALS"
       --component-verify-top-k "$COMPONENT_VERIFY_TOP_K"
       --out-dir "$out_dir"
@@ -103,6 +117,9 @@ run_model() {
     fi
     if [[ "$SKIP_COMPONENT_SCOUT" == "1" ]]; then
       args+=(--skip-component-scout)
+    fi
+    if [[ "$SKIP_RESIDUAL_PATCHES" == "1" ]]; then
+      args+=(--skip-residual-patches)
     fi
     "${args[@]}"
   ) >"$LOG_DIR/${label}.out" 2>"$LOG_DIR/${label}.err"
@@ -115,6 +132,7 @@ echo "  out_root=$OUT_ROOT"
 echo "  gpus=$GPU_A,$GPU_B"
 echo "  max_length=$MAX_LENGTH"
 echo "  patch_fit_frac=$PATCH_FIT_FRAC"
+echo "  basis_control=$BASIS_CONTROL"
 echo "  component_scout=$((1 - SKIP_COMPONENT_SCOUT))"
 
 run_model "$BASE_LABEL" "$BASE_MODEL_ID" "$BASE_PROMPT_STYLE" "$GPU_A" &

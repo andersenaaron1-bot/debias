@@ -13,6 +13,7 @@ from aisafety.mech.decision_patching import (
     suppress_subspace,
 )
 from aisafety.scripts.run_d4_lm_judge_decision_patching import (
+    _fit_suppression_basis,
     _heldout_component_recovery,
     _neutral_row,
     _prompt_record,
@@ -120,6 +121,16 @@ class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
     def test_fit_probe_reuses_its_sample_for_eval_reporting(self) -> None:
         self.assertTrue(_reuse_fit_probe_for_eval("generated", "generated"))
         self.assertFalse(_reuse_fit_probe_for_eval("atomic", "generated"))
+
+    def test_suppression_basis_controls_are_matched_rank(self) -> None:
+        observed = np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]], dtype=np.float32)
+        neutral = np.zeros_like(observed)
+        fitted = _fit_suppression_basis(observed, neutral, rank=2, basis_control="fitted", seed=1234)
+        random = _fit_suppression_basis(observed, neutral, rank=2, basis_control="random", seed=1234)
+        shuffled = _fit_suppression_basis(observed, neutral, rank=2, basis_control="shuffled_pair", seed=1234)
+        self.assertEqual(fitted.shape, (2, 3))
+        self.assertEqual(random.shape, (2, 3))
+        self.assertEqual(shuffled.shape, (2, 3))
 
 
 if __name__ == "__main__":
