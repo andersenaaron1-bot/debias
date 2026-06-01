@@ -485,6 +485,21 @@ def _counterfactual_summary(detail: pd.DataFrame, *, value_cols: list[str], grou
     return pd.DataFrame(rows)
 
 
+def _heldout_component_recovery(
+    patched: list[float],
+    observed: list[float],
+    neutral: list[float],
+    verify_indices: list[int],
+) -> np.ndarray:
+    """Compute verified-component recovery on the held-out scout subset only."""
+
+    return normalized_recovery(
+        np.asarray(patched),
+        np.asarray([observed[index] for index in verify_indices]),
+        np.asarray([neutral[index] for index in verify_indices]),
+    )
+
+
 def _run_residual_and_suppression(
     *,
     model: Any,
@@ -885,10 +900,11 @@ def _run_component_scout(
         detail["observed_margin"] = [observed[index] for index in verify_indices]
         detail["neutral_margin"] = [neutral[index] for index in verify_indices]
         detail["patched_margin"] = patched
-        detail["normalized_recovery"] = normalized_recovery(
-            np.asarray(patched),
-            np.asarray(observed),
-            np.asarray(neutral),
+        detail["normalized_recovery"] = _heldout_component_recovery(
+            patched,
+            observed,
+            neutral,
+            verify_indices,
         )
         verify_frames.append(detail)
     verification = pd.concat(verify_frames, ignore_index=True) if verify_frames else pd.DataFrame()

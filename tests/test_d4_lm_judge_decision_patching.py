@@ -12,7 +12,11 @@ from aisafety.mech.decision_patching import (
     replace_span_positions,
     suppress_subspace,
 )
-from aisafety.scripts.run_d4_lm_judge_decision_patching import _neutral_row, _prompt_record
+from aisafety.scripts.run_d4_lm_judge_decision_patching import (
+    _heldout_component_recovery,
+    _neutral_row,
+    _prompt_record,
+)
 
 
 class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
@@ -100,6 +104,15 @@ class D4LMJudgeDecisionPatchingTests(unittest.TestCase):
             np.asarray([2.0, 3.0]),
             np.asarray([4.0, 4.0]),
             np.asarray([0.0, 2.0]),
+        )
+        self.assertTrue(np.allclose(values, np.asarray([0.5, 0.5])))
+
+    def test_component_recovery_uses_heldout_subset_only(self) -> None:
+        values = _heldout_component_recovery(
+            patched=[2.0, 3.0],
+            observed=[100.0, 4.0, 4.0, 100.0],
+            neutral=[100.0, 0.0, 2.0, 100.0],
+            verify_indices=[1, 2],
         )
         self.assertTrue(np.allclose(values, np.asarray([0.5, 0.5])))
 
