@@ -12,6 +12,8 @@ GENERATED_COUNTERFACTUAL_JSONL="${GENERATED_COUNTERFACTUAL_JSONL:-$ARTROOT/data/
 PAIR_ROOT="${PAIR_ROOT:-$ARTROOT/data/derived/d4_openrouter_judge_screen_pairs_${RUN_TAG}}"
 OUT_DIR="${OUT_DIR:-$ARTROOT/artifacts/mechanistic/d4_openrouter_judge_screen_${RUN_TAG}}"
 MAX_SOURCE_COMPARISONS="${MAX_SOURCE_COMPARISONS:-100}"
+MAX_COMPLETION_TOKENS="${MAX_COMPLETION_TOKENS:-16}"
+REASONING_EFFORT="${REASONING_EFFORT:-none}"
 ESTIMATE_ONLY="${ESTIMATE_ONLY:-0}"
 MODEL_SPECS="${MODEL_SPECS:-qwen35_9b_it=qwen/qwen3.5-9b|gemma3_12b_it=google/gemma-3-12b-it|mistral32_24b_it=mistralai/mistral-small-3.2-24b-instruct|llama33_70b_it=meta-llama/llama-3.3-70b-instruct|qwen35_397b_a17b=qwen/qwen3.5-397b-a17b|gemini31_flash_lite=google/gemini-3.1-flash-lite|gpt54_nano=openai/gpt-5.4-nano|gpt54_mini=openai/gpt-5.4-mini}"
 CONTRAST_SPECS="${CONTRAST_SPECS:-}"
@@ -41,6 +43,8 @@ args=(
   --dataset "original_hllm=$PAIR_ROOT/hllm/bt_pairs.jsonl"
   --dataset "generated_ai_tone=$PAIR_ROOT/generated/bt_pairs.jsonl"
   --max-source-comparisons "$MAX_SOURCE_COMPARISONS"
+  --max-completion-tokens "$MAX_COMPLETION_TOKENS"
+  --reasoning-effort "$REASONING_EFFORT"
   --out-dir "$OUT_DIR"
 )
 

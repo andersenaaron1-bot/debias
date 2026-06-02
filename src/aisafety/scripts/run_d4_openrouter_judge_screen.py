@@ -38,6 +38,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--comparison-template", default="standard")
     parser.add_argument("--max-source-comparisons", type=int, default=100)
     parser.add_argument("--max-completion-tokens", type=int, default=4)
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["", "none", "minimal", "low", "medium", "high", "xhigh"],
+        default="",
+        help="Optional OpenRouter reasoning effort. Use none for short forced-choice verdicts.",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout-seconds", type=float, default=120.0)
     parser.add_argument("--max-retries", type=int, default=3)
@@ -106,6 +112,7 @@ def _request_key(*, dataset: str, model_label: str, model_id: str, row: dict[str
                 "comparison_template": str(args.comparison_template),
                 "temperature": float(args.temperature),
                 "max_completion_tokens": int(args.max_completion_tokens),
+                "reasoning_effort": str(args.reasoning_effort),
                 "system_prompt": SYSTEM_PROMPT,
             },
             sort_keys=True,
@@ -195,6 +202,8 @@ def _call_openrouter(
         "max_tokens": int(args.max_completion_tokens),
         "seed": int(args.seed),
     }
+    if str(args.reasoning_effort):
+        payload["reasoning"] = {"effort": str(args.reasoning_effort)}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -432,6 +441,19 @@ def main() -> None:
     scores = scores[scores["model_id"].astype(str).isin(requested_models) & scores["dataset"].astype(str).isin(requested_datasets)]
     scores.to_csv(out_dir / "scores.csv", index=False)
     pair_df, summary_df = summarize_scores(scores)
+    if pair_df.empty:
+        error_counts = (
+            scores.fillna({"error": "", "response_text": ""})
+            .groupby(["model_label", "error", "response_text"], dropna=False)
+            .size()
+            .reset_index(name="n_rows")
+            .sort_values(["model_label", "n_rows"], ascending=[True, False])
+        )
+        error_counts.to_csv(out_dir / "invalid_response_summary.csv", index=False)
+        raise ValueError(
+            "No valid A/B responses were emitted. "
+            f"Inspect {out_dir / 'invalid_response_summary.csv'}."
+        )
     contrast_df = contrast_summaries(pair_df, [str(value) for value in args.contrast])
     pair_df.to_csv(out_dir / "pair_summary.csv", index=False)
     summary_df.to_csv(out_dir / "model_dataset_summary.csv", index=False)
