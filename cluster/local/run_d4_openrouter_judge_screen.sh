@@ -14,6 +14,7 @@ OUT_DIR="${OUT_DIR:-$ARTROOT/artifacts/mechanistic/d4_openrouter_judge_screen_${
 MAX_SOURCE_COMPARISONS="${MAX_SOURCE_COMPARISONS:-100}"
 ESTIMATE_ONLY="${ESTIMATE_ONLY:-0}"
 MODEL_SPECS="${MODEL_SPECS:-qwen35_9b_it=qwen/qwen3.5-9b|gemma3_12b_it=google/gemma-3-12b-it|mistral32_24b_it=mistralai/mistral-small-3.2-24b-instruct|llama33_70b_it=meta-llama/llama-3.3-70b-instruct|qwen35_397b_a17b=qwen/qwen3.5-397b-a17b|gemini31_flash_lite=google/gemini-3.1-flash-lite|gpt54_nano=openai/gpt-5.4-nano|gpt54_mini=openai/gpt-5.4-mini}"
+CONTRAST_SPECS="${CONTRAST_SPECS:-}"
 
 cd "$WORKDIR"
 export PYTHONPATH="$WORKDIR/src${PYTHONPATH:+:$PYTHONPATH}"
@@ -46,6 +47,12 @@ args=(
 IFS='|' read -r -a model_specs <<< "$MODEL_SPECS"
 for spec in "${model_specs[@]}"; do
   args+=(--model "$spec")
+done
+IFS='|' read -r -a contrast_specs <<< "$CONTRAST_SPECS"
+for spec in "${contrast_specs[@]}"; do
+  if [[ -n "$spec" ]]; then
+    args+=(--contrast "$spec")
+  fi
 done
 if [[ "$ESTIMATE_ONLY" == "1" ]]; then
   args+=(--estimate-only)

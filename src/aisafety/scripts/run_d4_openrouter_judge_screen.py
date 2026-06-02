@@ -392,7 +392,8 @@ def main() -> None:
                     prompt=str(job["prompt"]),
                     args=args,
                 )
-                if key in cache:
+                cached = cache.get(key)
+                if cached is not None and not str(cached.get("error") or "").strip():
                     continue
                 try:
                     payload = _call_openrouter(client, api_key=api_key, model_id=model_id, prompt=str(job["prompt"]), args=args)
