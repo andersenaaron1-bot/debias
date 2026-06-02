@@ -100,7 +100,16 @@ def _prompt(row: dict[str, Any], *, comparison_template: str) -> str:
     return _comparison_user_content(row, comparison_template=str(comparison_template))
 
 
-def _request_key(*, dataset: str, model_label: str, model_id: str, row: dict[str, Any], prompt: str, args: argparse.Namespace) -> str:
+def _request_key(
+    *,
+    dataset: str,
+    model_label: str,
+    model_id: str,
+    row: dict[str, Any],
+    prompt: str,
+    args: argparse.Namespace,
+    reasoning_effort: str,
+) -> str:
     return sha1_hex(
         json.dumps(
             {
@@ -112,7 +121,7 @@ def _request_key(*, dataset: str, model_label: str, model_id: str, row: dict[str
                 "comparison_template": str(args.comparison_template),
                 "temperature": float(args.temperature),
                 "max_completion_tokens": int(args.max_completion_tokens),
-                "reasoning_effort": str(args.reasoning_effort),
+                "reasoning_effort": str(reasoning_effort),
                 "system_prompt": SYSTEM_PROMPT,
             },
             sort_keys=True,
@@ -146,6 +155,11 @@ def _catalog(client: httpx.Client) -> dict[str, dict[str, Any]]:
 
 def _estimated_tokens(prompt: str, *, chars_per_token: float) -> int:
     return max(1, int(math.ceil(len(str(prompt)) / max(float(chars_per_token), 0.1))))
+
+
+def _effective_reasoning_effort(args: argparse.Namespace, catalog_entry: dict[str, Any]) -> str:
+    supported = {str(value) for value in catalog_entry.get("supported_parameters", [])}
+    return str(args.reasoning_effort) if "reasoning" in supported else ""
 
 
 def _estimate_rows(
@@ -191,6 +205,7 @@ def _call_openrouter(
     model_id: str,
     prompt: str,
     args: argparse.Namespace,
+    reasoning_effort: str,
 ) -> dict[str, Any]:
     payload = {
         "model": str(model_id),
@@ -202,8 +217,8 @@ def _call_openrouter(
         "max_tokens": int(args.max_completion_tokens),
         "seed": int(args.seed),
     }
-    if str(args.reasoning_effort):
-        payload["reasoning"] = {"effort": str(args.reasoning_effort)}
+    if str(reasoning_effort):
+        payload["reasoning"] = {"effort": str(reasoning_effort)}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -392,6 +407,7 @@ def main() -> None:
         cache_path = out_dir / "request_cache.jsonl"
         cache = _cached_rows(cache_path)
         for model_label, model_id in models:
+            reasoning_effort = _effective_reasoning_effort(args, catalog.get(model_id, {}))
             for job in jobs:
                 key = _request_key(
                     dataset=str(job["dataset"]),
@@ -400,12 +416,20 @@ def main() -> None:
                     row=job["row"],
                     prompt=str(job["prompt"]),
                     args=args,
+                    reasoning_effort=reasoning_effort,
                 )
                 cached = cache.get(key)
                 if cached is not None and not str(cached.get("error") or "").strip():
                     continue
                 try:
-                    payload = _call_openrouter(client, api_key=api_key, model_id=model_id, prompt=str(job["prompt"]), args=args)
+                    payload = _call_openrouter(
+                        client,
+                        api_key=api_key,
+                        model_id=model_id,
+                        prompt=str(job["prompt"]),
+                        args=args,
+                        reasoning_effort=reasoning_effort,
+                    )
                     scored = _score_row(
                         dataset=str(job["dataset"]),
                         model_label=model_label,
@@ -441,15 +465,20 @@ def main() -> None:
     scores = scores[scores["model_id"].astype(str).isin(requested_models) & scores["dataset"].astype(str).isin(requested_datasets)]
     scores.to_csv(out_dir / "scores.csv", index=False)
     pair_df, summary_df = summarize_scores(scores)
-    if pair_df.empty:
-        error_counts = (
-            scores.fillna({"error": "", "response_text": ""})
-            .groupby(["model_label", "error", "response_text"], dropna=False)
+    invalid_scores = scores[~scores["valid_choice"].astype(bool)].copy()
+    if not invalid_scores.empty:
+        for col in ("error", "response_text"):
+            if col not in invalid_scores.columns:
+                invalid_scores[col] = ""
+            invalid_scores[col] = invalid_scores[col].fillna("")
+        invalid_summary = (
+            invalid_scores.groupby(["model_label", "error", "response_text"], dropna=False)
             .size()
             .reset_index(name="n_rows")
             .sort_values(["model_label", "n_rows"], ascending=[True, False])
         )
-        error_counts.to_csv(out_dir / "invalid_response_summary.csv", index=False)
+        invalid_summary.to_csv(out_dir / "invalid_response_summary.csv", index=False)
+    if pair_df.empty:
         raise ValueError(
             "No valid A/B responses were emitted. "
             f"Inspect {out_dir / 'invalid_response_summary.csv'}."

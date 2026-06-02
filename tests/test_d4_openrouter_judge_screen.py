@@ -1,9 +1,11 @@
 import unittest
+from argparse import Namespace
 
 import pandas as pd
 
 from aisafety.scripts.run_d4_openrouter_judge_screen import (
     _cap_rows,
+    _effective_reasoning_effort,
     _estimate_rows,
     contrast_summaries,
     parse_choice,
@@ -39,6 +41,11 @@ class D4OpenRouterJudgeScreenTests(unittest.TestCase):
         )
         self.assertEqual(int(estimated.iloc[0]["estimated_prompt_tokens"]), 20)
         self.assertAlmostEqual(float(estimated.iloc[0]["estimated_cost_usd"]), 2.8)
+
+    def test_reasoning_effort_is_only_sent_to_supported_models(self) -> None:
+        args = Namespace(reasoning_effort="none")
+        self.assertEqual(_effective_reasoning_effort(args, {"supported_parameters": ["reasoning"]}), "none")
+        self.assertEqual(_effective_reasoning_effort(args, {"supported_parameters": ["max_tokens"]}), "")
 
     def test_summary_and_model_contrast_average_order_swaps(self) -> None:
         scores = pd.DataFrame(
