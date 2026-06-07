@@ -207,8 +207,86 @@ python -m aisafety.scripts.build_judge_competence_pref_pairs --help
 python -m aisafety.scripts.build_d4_invariance_style_groups --help
 ```
 
+Judge-reasoning trajectories:
+
+```bash
+python -m aisafety.scripts.build_judge_reasoning_pairs --help
+python -m aisafety.scripts.build_judge_reasoning_suite --help
+python -m aisafety.scripts.run_judge_reasoning_trajectories --help
+python -m aisafety.scripts.analyze_judge_reasoning_trajectories --help
+python -m aisafety.scripts.run_judge_reasoning_interventions --help
+python -m aisafety.scripts.summarize_judge_reasoning_suite --help
+```
+
 Run these help commands inside the container or with `PYTHONPATH=$WORKDIR/src`
 when only imports from this repo are needed.
+
+## LRZ Judge-Reasoning Trajectory Scout
+
+This suite asks when and how open-weight judges form pairwise verdicts across
+quality, authorship, moral, safety, truthfulness, and related dimensions. It
+stores exact token prefixes for replay, uses pair-grouped probes, and separates
+descriptive trajectory results from intervention evidence.
+
+The recommended first scout submits the pair build, Qwen3 base and post-trained
+trajectory jobs, dependent analyses, and a combined summary:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_reasoning_qwen3_scout_v1 MAX_PAIRS_PER_DATASET=80 MAX_PAIRS=60 BRANCHES_PER_COMPARISON=3 bash cluster/lrz/submit_judge_reasoning_qwen3_matrix.sh
+```
+
+On the local multi-GPU host, use the corresponding resumable wrapper:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_reasoning_qwen3_scout_v1 GPU_A=1 GPU_B=7 MAX_PAIRS_PER_DATASET=60 MAX_PAIRS=60 BRANCHES_PER_COMPARISON=3 bash cluster/local/run_judge_reasoning_qwen3_matrix.sh
+```
+
+Build every currently staged dataset in
+`configs/datasets/judge_reasoning_suite_v1.json`. `SKIP_MISSING=1` permits a
+scout from the available domains while recording missing optional sources:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=judge-reason-pairs --cpus-per-task=2 --mem=32G --time=00:30:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",CONFIG="$WORKDIR/configs/datasets/judge_reasoning_suite_v1.json",OUT_DIR="$ARTROOT/data/derived/judge_reasoning_suite_v1",MAX_PAIRS_PER_DATASET=200,SKIP_MISSING=1 cluster/lrz/judge_reasoning_suite_pairs.sbatch
+```
+
+Capture a single-model scout after the pair job succeeds. Use explicit layers
+for model-stage comparisons:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=judge-reason-trace --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=10:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",COMPARISONS_JSONL="$ARTROOT/data/derived/judge_reasoning_suite_v1/comparisons.jsonl",MODEL_ID="Qwen/Qwen3-8B",RUN_LABEL=qwen3_8b_it,REASONING_MODES=thinking:direct,SELECTED_LAYERS=4:8:12:16:20:24:28:32,BRANCHES_PER_COMPARISON=3,MAX_PAIRS=60,MAX_NEW_TOKENS_THINKING=256,OUT_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_trajectories_qwen3_8b_it_scout_v1" cluster/lrz/judge_reasoning_trajectories.sbatch
+```
+
+Slurm parses commas in `--export` as variable separators. These wrappers accept
+colon-separated `REASONING_MODES`, `SELECTED_LAYERS`, `PROBE_TARGETS`,
+`ALPHAS`, and `RANDOM_CONTROL_SEEDS`, then convert them to comma-separated
+Python arguments. Use colons for those values in direct `sbatch --export`
+commands.
+
+Trajectory capture writes complete shards and their metadata incrementally. To
+resume the same output directory after preemption, resubmit with `RESUME=1`;
+completed trace IDs are skipped. Without `RESUME=1`, an existing trace artifact
+causes a fail-fast error instead of being overwritten.
+
+Analyze a completed trace artifact on the CPU partition:
+
+```bash
+cd "$WORKDIR" && sbatch --parsable --partition=lrz-cpu --qos=cpu --job-name=judge-reason-analyze --cpus-per-task=8 --mem=96G --time=04:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",TRACE_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_trajectories_qwen3_8b_it_scout_v1",OUT_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_analysis_qwen3_8b_it_scout_v1" cluster/lrz/judge_reasoning_analysis.sbatch
+```
+
+The analyzer uses stable pair-grouped folds across layers and trajectory
+points. `decision_dynamics.csv` is derived only from out-of-fold probabilities.
+Use colon-separated overrides in Slurm exports, for example
+`GROUP_COLUMNS=comparison_dimension:source_dataset:validity_type:difficulty_tier:analysis_split`.
+Existing trace artifacts can be re-analyzed without rerunning the model.
+
+Run the intervention scout only after selecting a stable held-out probe
+direction. The script automatically chooses the best matching successful probe
+when `HIDDEN_LAYER=0` and `POINT_INDEX=-1`, but paper-facing runs should freeze
+both explicitly:
+
+```bash
+cd "$WORKDIR" && PARTS="lrz-hgx-h100-94x4,lrz-dgx-a100-80x8,lrz-hgx-a100-80x4" && sbatch --parsable --partition="$PARTS" --job-name=judge-reason-intervene --gres=gpu:1 --cpus-per-task=8 --mem=160G --time=06:00:00 --chdir="$WORKDIR" --output="$ARTROOT/slurm_logs/%x-%j.out" --error="$ARTROOT/slurm_logs/%x-%j.err" --container-image="$IMAGE" --container-mounts="$WORKDIR:$WORKDIR,$ARTROOT:$ARTROOT,$ARTROOT:/workspace" --container-workdir="$WORKDIR" --container-env=PYTHONPATH,HF_HOME,TRANSFORMERS_CACHE,HF_DATASETS_CACHE,HF_TOKEN,HUGGING_FACE_HUB_TOKEN --export=ALL,WORKDIR="$WORKDIR",ARTROOT="$ARTROOT",PYTHONPATH="$WORKDIR/src",HF_HOME="$HF_HOME",TRANSFORMERS_CACHE="$TRANSFORMERS_CACHE",HF_DATASETS_CACHE="$HF_DATASETS_CACHE",MODEL_ID="Qwen/Qwen3-8B",TRACE_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_trajectories_qwen3_8b_it_scout_v1",ANALYSIS_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_analysis_qwen3_8b_it_scout_v1",OUT_DIR="$ARTROOT/artifacts/mechanistic/judge_reasoning_interventions_qwen3_8b_it_scout_v1",PROBE_TARGET=final_choice,HIDDEN_LAYER=0,POINT_INDEX=-1,MAX_TRACES=64 cluster/lrz/judge_reasoning_interventions.sbatch
+```
 
 ## Immediate LRZ Judge-Competence Adapter Pair Commands
 

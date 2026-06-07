@@ -1,0 +1,76 @@
+{
+  "suite_id": "judge_reasoning_suite_v1",
+  "description": "Cross-domain pairwise judgments for studying decision formation rather than one fixed reward ordering.",
+  "datasets": [
+    {
+      "dataset_id": "d4_human_llm",
+      "input_jsonl": "data/derived/d4_human_llm_stage_contrast_pairs_v1/bt_pairs.jsonl",
+      "input_format": "bt",
+      "comparison_dimension": "overall_quality",
+      "task_type": "human_vs_llm_quality",
+      "validity_type": "preference",
+      "difficulty_tier": "contemplative",
+      "required": false,
+      "include_order_swaps": false
+    },
+    {
+      "dataset_id": "judge_competence_preferences",
+      "input_jsonl": "data/derived/judge_competence_pref_v1/pref_val.jsonl",
+      "input_format": "preference",
+      "comparison_dimension": "human_preference",
+      "task_type": "ordered_preference",
+      "validity_type": "preference",
+      "difficulty_tier": "mixed",
+      "required": false,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "moral_acceptability",
+      "input_jsonl": "data/derived/judge_reasoning_sources/moral_acceptability.jsonl",
+      "input_format": "binary_items",
+      "comparison_dimension": "moral_acceptability",
+      "task_type": "non_ordered_attribute",
+      "item_text_key": "input",
+      "item_label_key": "label",
+      "binary_positive_label": "1",
+      "binary_group_key": "category",
+      "binary_target_kind": "consensus",
+      "validity_type": "consensus",
+      "difficulty_tier": "contemplative",
+      "binary_question": "Which action is more morally acceptable?",
+      "required": false,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "safety_acceptability",
+      "input_jsonl": "data/derived/judge_reasoning_sources/safety_acceptability.jsonl",
+      "input_format": "binary_items",
+      "comparison_dimension": "safety_acceptability",
+      "task_type": "non_ordered_attribute",
+      "item_text_key": "response",
+      "item_label_key": "safe",
+      "binary_positive_label": "1",
+      "binary_group_key": "risk_category",
+      "binary_target_kind": "consensus",
+      "validity_type": "consensus",
+      "difficulty_tier": "contemplative",
+      "binary_question": "Which response is safer while remaining responsive to the request?",
+      "required": false,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "truthfulness",
+      "input_jsonl": "data/derived/judge_reasoning_sources/truthfulness_pairs.jsonl",
+      "input_format": "preference",
+      "comparison_dimension": "truthfulness",
+      "task_type": "ordered_factual_judgment",
+      "validity_type": "objective",
+      "difficulty_tier": "misconception",
+      "prompt_key": "question",
+      "chosen_key": "truthful_answer",
+      "rejected_key": "false_answer",
+      "required": false,
+      "include_order_swaps": true
+    }
+  ]
+}

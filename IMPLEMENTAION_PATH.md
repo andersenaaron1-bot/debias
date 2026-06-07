@@ -25,6 +25,80 @@ adapter grid. It is a stricter mechanistic pipeline:
 The earlier failed run is treated as a recovery target, not as evidence. Any
 utility-control result from the invalid split is retired.
 
+## Judge-Reasoning Trajectory Extension
+
+The repository also supports a bounded, model-internal study of how
+open-weight LLM judges form decisions. This is an adjacent diagnostic track,
+not a replacement for the active D4 atom-to-bundle path.
+
+The motivating questions are:
+
+1. when does a final A/B verdict become linearly recoverable during generated
+   reasoning
+2. whether authorship, presentation order, prompt framing, or another
+   experimental condition becomes recoverable before the verdict
+3. whether those condition and verdict directions are aligned, orthogonal, or
+   model-stage dependent
+4. whether sampled reasoning branches converge on a shared endpoint
+5. whether steering a fitted direction at a specific layer and reasoning point
+   changes the final verdict beyond matched random orthogonal controls
+
+The suite is deliberately comparison-dimension agnostic. The same canonical
+pair schema can represent:
+
+- human-vs-LLM quality judgments and D4 surface-cue counterfactuals
+- human preference or reward-model competence pairs
+- moral acceptability
+- safety acceptability
+- truthfulness
+- other binary or pairwise non-ordered attributes
+
+The implementation stages are:
+
+- `build_judge_reasoning_pairs.py`: normalize one pair or binary-item dataset
+- `build_judge_reasoning_suite.py`: merge config-defined domains into one
+  canonical comparison suite
+- `run_judge_reasoning_trajectories.py`: sample reasoning branches and store
+  exact prompt/generated token ids plus selected last-token residual states
+- `analyze_judge_reasoning_trajectories.py`: pair-grouped cross-fitted probes,
+  per-trace choice commitment and target-evidence timing, shortcut gaps,
+  confidence velocity and revisions, direction angles, branch convergence,
+  token-normalized path geometry, margin revisions, and a descriptive
+  condition-direction mediation screen
+- `run_judge_reasoning_interventions.py`: replay a saved partial reasoning
+  prefix and compare fitted-direction steering against no-op and matched random
+  orthogonal controls
+- `summarize_judge_reasoning_suite.py`: compare model, post-training, reasoning
+  mode, and comparison-dimension analyses
+
+Run direct/no-thinking and generated-reasoning conditions separately. Compare
+base and post-trained models only where tokenizer, architecture, prompt, pair,
+layer indexing, and generation settings are recorded and meaningfully
+comparable. Use pair-grouped splits so order swaps and branches from the same
+source pair cannot cross probe train/test folds.
+
+Trace-level timing must use out-of-fold probabilities, not the aggregate AUC
+curve. The analyzer therefore emits:
+
+- `probe_oof_predictions.csv`: held-out probabilities by trace, layer, and
+  sampled generation point
+- `decision_dynamics.csv`: absolute-token choice commitment, target emergence,
+  shortcut gap, confidence velocity, and productive/harmful target updates
+- `decision_dynamics_summary.csv`: stratum summaries for factual,
+  consensus/normative, preference, source, difficulty, and split metadata
+- `trajectory_geometry.csv`: per-trace path length, endpoint displacement,
+  path efficiency, and token-normalized residual velocity
+
+The legacy `commitment_summary.csv` remains an aggregate held-out-AUC
+recoverability diagnostic and is explicitly labeled as such. It is not a
+per-trace confidence or commitment measurement.
+
+The trajectory probe and mediation outputs are descriptive. A high probe AUC
+does not show that the decoded direction caused the verdict. Only replay
+interventions with fitted, sign-reversed, random orthogonal, order-swap, and
+competence-retention controls can support a scoped causal-influence claim.
+Even successful steering does not establish a universal reasoning mechanism.
+
 ## Scientific Contract
 
 The main claim to build toward is:
