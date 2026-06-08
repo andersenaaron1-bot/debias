@@ -64,10 +64,10 @@ class JudgeReasoningSourcePackTests(unittest.TestCase):
     def test_ethics_pairs_by_length_and_marks_consensus_target(self) -> None:
         pairs = build_ethics_pairs(
             [
-                {"input": "Return the lost wallet.", "label": 1, "is_short": True},
-                {"input": "Keep the lost wallet.", "label": 0, "is_short": True},
-                {"input": "Help a neighbor.", "label": 1, "is_short": True},
-                {"input": "Deliberately injure a neighbor.", "label": 0, "is_short": True},
+                {"input": "Return the lost wallet.", "label": 0, "is_short": True},
+                {"input": "Keep the lost wallet.", "label": 1, "is_short": True},
+                {"input": "Help a neighbor.", "label": 0, "is_short": True},
+                {"input": "Deliberately injure a neighbor.", "label": 1, "is_short": True},
             ],
             seed=1234,
         )

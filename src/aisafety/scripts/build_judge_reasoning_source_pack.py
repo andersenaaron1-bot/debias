@@ -292,13 +292,24 @@ def load_ethics_rows(path: Path) -> tuple[list[dict[str, Any]], str]:
 
 
 def _label_value(row: dict[str, Any]) -> int | None:
+    """Return 1 for morally acceptable and 0 for unacceptable.
+
+    ETHICS Commonsense encodes 1 as morally wrong/unacceptable, so its source
+    label must be inverted before constructing positive/negative pairs.
+    """
+
     raw = row.get("label")
     if raw is None:
         raw = row.get("is_acceptable")
     text = "" if raw is None else str(raw).strip().lower()
-    if text in {"1", "true", "acceptable", "yes"}:
+    if row.get("label") is not None:
+        if text == "0":
+            return 1
+        if text == "1":
+            return 0
+    if text in {"true", "acceptable", "yes"}:
         return 1
-    if text in {"0", "false", "unacceptable", "no"}:
+    if text in {"false", "unacceptable", "no"}:
         return 0
     return None
 
