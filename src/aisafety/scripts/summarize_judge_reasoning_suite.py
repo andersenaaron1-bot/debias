@@ -61,7 +61,12 @@ def _read_with_label(path: Path, filename: str, label: str) -> pd.DataFrame:
     if not source.is_file():
         return pd.DataFrame()
     frame = pd.read_csv(source)
-    frame.insert(0, "run_label", label)
+    if "run_label" in frame.columns:
+        frame["run_label"] = label
+        columns = ["run_label", *[column for column in frame.columns if column != "run_label"]]
+        frame = frame.loc[:, columns]
+    else:
+        frame.insert(0, "run_label", label)
     return frame
 
 
