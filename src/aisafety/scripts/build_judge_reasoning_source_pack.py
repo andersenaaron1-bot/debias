@@ -424,7 +424,7 @@ def build_helpsteer_pairs(
                         strength,
                         _pair_row(
                             pair_id=pair_id,
-                            source_dataset="helpsteer2",
+                            source_dataset="helpsteer2_dominated",
                             subset="pareto_dominated",
                             split="validation",
                             prompt=prompt,
@@ -465,7 +465,7 @@ def build_helpsteer_pairs(
                         strength,
                         _pair_row(
                             pair_id=pair_id,
-                            source_dataset="helpsteer2",
+                            source_dataset="helpsteer2_tradeoff",
                             subset="pareto_conflict",
                             split="validation",
                             prompt=prompt,
@@ -528,8 +528,13 @@ def build_d4_pairs(rows: Iterable[dict[str, Any]], *, seed: int) -> list[dict[st
         )
         by_pair[pair_id] = _pair_row(
             pair_id=pair_id,
-            source_dataset=str(row.get("source_dataset") or "d4_human_llm"),
-            subset=str(row.get("subset") or row.get("item_type") or "all"),
+            source_dataset="d4_human_llm",
+            subset=str(
+                row.get("source_dataset")
+                or row.get("subset")
+                or row.get("item_type")
+                or "all"
+            ),
             split=str(row.get("split") or ""),
             prompt=prompt,
             option_a=human,
@@ -544,6 +549,8 @@ def build_d4_pairs(rows: Iterable[dict[str, Any]], *, seed: int) -> list[dict[st
             metadata={
                 "option_a_authorship": "human",
                 "option_b_authorship": "llm",
+                "original_source_dataset": str(row.get("source_dataset") or ""),
+                "original_subset": str(row.get("subset") or ""),
                 "llm_generator": str(row.get("llm_generator") or ""),
                 "item_type": str(row.get("item_type") or ""),
             },

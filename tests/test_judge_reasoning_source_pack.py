@@ -119,8 +119,16 @@ class JudgeReasoningSourcePackTests(unittest.TestCase):
         self.assertEqual(len(pairs["tradeoff"]), 1)
         self.assertEqual(pairs["dominated"][0]["target_option"], "A")
         self.assertEqual(pairs["dominated"][0]["target_kind"], "consensus")
+        self.assertEqual(
+            pairs["dominated"][0]["source_dataset"],
+            "helpsteer2_dominated",
+        )
         self.assertEqual(pairs["tradeoff"][0]["target_option"], "")
         self.assertEqual(pairs["tradeoff"][0]["validity_type"], "plural")
+        self.assertEqual(
+            pairs["tradeoff"][0]["source_dataset"],
+            "helpsteer2_tradeoff",
+        )
 
     def test_d4_deduplicates_orders_without_assigning_human_as_gold(self) -> None:
         source = {
@@ -139,6 +147,8 @@ class JudgeReasoningSourcePackTests(unittest.TestCase):
         )
         self.assertEqual(len(pairs), 1)
         self.assertEqual(pairs[0]["target_option"], "")
+        self.assertEqual(pairs[0]["source_dataset"], "d4_human_llm")
+        self.assertEqual(pairs[0]["original_source_dataset"], "hape")
         comparisons = build_comparisons(
             pairs,
             input_format="generic",
