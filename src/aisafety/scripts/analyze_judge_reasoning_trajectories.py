@@ -141,7 +141,7 @@ def _binary_target(
     if target == "target_selected":
         values = frame.get("target_selected", pd.Series([None] * len(frame)))
         valid = values.notna().to_numpy() & scope_mask
-        return valid, values.fillna(False).astype(bool).astype(int).to_numpy(), "true"
+        return valid, values.eq(True).astype(int).to_numpy(), "true"
     if target == "target_option":
         values = frame.get("target_option", pd.Series([""] * len(frame))).map(normalize_choice)
         valid = values.isin(["A", "B"]).to_numpy() & scope_mask

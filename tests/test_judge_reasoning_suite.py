@@ -333,6 +333,19 @@ class JudgeReasoningSuiteTests(unittest.TestCase):
         self.assertEqual(positive, "positive_first")
         self.assertEqual(values.tolist(), [0, 0, 1, 0])
 
+    def test_target_selected_handles_missing_values_without_coercion(self) -> None:
+        frame = pd.DataFrame({"target_selected": [True, False, None]})
+        encoded = _binary_target(
+            frame,
+            target="target_selected",
+            positive_condition_label="",
+        )
+        self.assertIsNotNone(encoded)
+        valid, values, positive = encoded
+        self.assertEqual(valid.tolist(), [True, True, False])
+        self.assertEqual(values.tolist(), [1, 0, 0])
+        self.assertEqual(positive, "true")
+
     def test_probe_direction_selection_uses_best_matching_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
