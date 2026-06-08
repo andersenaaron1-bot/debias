@@ -210,6 +210,7 @@ python -m aisafety.scripts.build_d4_invariance_style_groups --help
 Judge-reasoning trajectories:
 
 ```bash
+python -m aisafety.scripts.build_judge_reasoning_source_pack --help
 python -m aisafety.scripts.build_judge_reasoning_pairs --help
 python -m aisafety.scripts.build_judge_reasoning_suite --help
 python -m aisafety.scripts.run_judge_reasoning_trajectories --help

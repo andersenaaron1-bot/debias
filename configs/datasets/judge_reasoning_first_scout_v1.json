@@ -1,0 +1,69 @@
+{
+  "suite_id": "judge_reasoning_first_scout_v1",
+  "description": "Objective, consensus, plural-tradeoff, and ecological pairwise decisions for the first reasoning-dynamics scout.",
+  "datasets": [
+    {
+      "dataset_id": "arc_easy",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/arc_easy.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "factual_correctness",
+      "task_type": "ordered_factual_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "arc_challenge",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/arc_challenge.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "factual_correctness",
+      "task_type": "ordered_factual_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "truthfulqa_binary",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/truthfulqa_binary.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "truthfulness",
+      "task_type": "ordered_factual_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "ethics_commonsense_hard",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/ethics_commonsense_hard.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "moral_acceptability",
+      "task_type": "non_ordered_attribute",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_dominated",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/helpsteer2_dominated.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "ordered_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/helpsteer2_tradeoff.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "non_ordered_attribute",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm",
+      "input_jsonl": "data/derived/judge_reasoning_sources_v1/d4_human_llm.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    }
+  ]
+}
