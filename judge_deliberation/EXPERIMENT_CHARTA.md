@@ -53,6 +53,32 @@ interventions. The comparison texts remain fixed; only the decision rule
 changes. This within-pair manipulation is the main test of the
 criterion-uncertainty account.
 
+### Matched HelpSteer2 Evidence Collector
+
+The first criterion test removes the cross-dataset and answer-format
+confounds. It selects the same HelpSteer2 response pairs from four strata:
+
+- Pareto dominance;
+- one-attribute separation;
+- multi-attribute tradeoff;
+- annotation near-tie.
+
+Every pair is judged under overall, correctness, helpfulness, coherence, and a
+fixed weighted rubric, in both presentation orders. The verdict set is A/B/C,
+where C means tied or underdetermined under the stated rule. The primary
+estimands are:
+
+- criterion-specific target compliance after requiring order consistency;
+- whether verdicts switch when the criterion-specific target switches;
+- justified-tie recall and unjustified-tie rate;
+- direct-to-thinking changes in those measures;
+- branch agreement, revisions, natural termination, and forced confidence.
+
+The target is a rule-compliance proxy derived from HelpSteer2 annotations. For
+overall tradeoffs and near-ties, C is correct because the prompt explicitly
+defines those cases as underdetermined, not because HelpSteer2 supplies a
+universal preference label.
+
 ## Phase 1: Qwen3-8B Token-Budget Curves
 
 ### Conditions
@@ -101,6 +127,10 @@ Advance the working claim only if:
 
 If only token length differs, the result is an elicitation observation, not a
 reasoning-quality claim.
+
+The matched HelpSteer2 collector is the first test of item 4. A positive result
+requires better criterion compliance or justified ties, not merely higher
+confidence or longer rationales.
 
 ## Phase 2: Fixed-Decoder Activation Dynamics
 

@@ -12,8 +12,8 @@ import numpy as np
 from aisafety.config import DEFAULT_CACHE_DIR, DEFAULT_SEED, PROJECT_ROOT
 from aisafety.mech.d4_io import read_jsonl, resolve_path, sha1_hex, write_json
 from aisafety.mech.judge_reasoning import (
-    normalize_choice,
-    parse_final_choice,
+    normalize_verdict,
+    parse_final_verdict,
     render_model_prompt,
 )
 from aisafety.scripts.run_d4_bt_stage_contrast import _csv_list, _load_lm
@@ -80,16 +80,16 @@ def _parse_budgets(raw: str) -> list[int]:
     return values
 
 
-def _single_token_label_ids(tokenizer: Any, labels: list[str]) -> tuple[int, int]:
-    if len(labels) != 2:
-        raise ValueError("--labels requires exactly two labels.")
+def _single_token_label_ids(tokenizer: Any, labels: list[str]) -> tuple[int, ...]:
+    if len(labels) < 2:
+        raise ValueError("--labels requires at least two labels.")
     encoded = [
         tokenizer(label, add_special_tokens=False)["input_ids"]
         for label in labels
     ]
     if any(len(ids) != 1 for ids in encoded):
         raise ValueError(f"Budget verdict labels must be single tokens, got {encoded}")
-    return int(encoded[0][0]), int(encoded[1][0])
+    return tuple(int(ids[0]) for ids in encoded)
 
 
 def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -160,7 +160,7 @@ def _score_label_prompts(
     model: Any,
     tokenizer: Any,
     prompts: list[str],
-    label_ids: tuple[int, int],
+    label_ids: tuple[int, ...],
     max_length: int,
     batch_size: int,
 ) -> np.ndarray:
@@ -186,9 +186,13 @@ def _score_label_prompts(
             logits = model(**encoded, return_dict=True).logits.float()
         row_index = torch.arange(len(batch), device=logits.device)
         final_logits = logits[row_index, lengths.to(logits.device) - 1]
-        selected = final_logits[:, [int(label_ids[0]), int(label_ids[1])]]
+        selected = final_logits[:, [int(value) for value in label_ids]]
         outputs.append(selected.detach().cpu().numpy())
-    return np.concatenate(outputs, axis=0) if outputs else np.zeros((0, 2))
+    return (
+        np.concatenate(outputs, axis=0)
+        if outputs
+        else np.zeros((0, len(label_ids)))
+    )
 
 
 def _verdict_row(
@@ -214,12 +218,20 @@ def _verdict_row(
     margin = float(scores[0] - scores[1])
     shifted = scores - float(np.max(scores))
     probabilities = np.exp(shifted) / float(np.exp(shifted).sum())
-    forced_choice = labels[0] if margin >= 0 else labels[1]
-    target = normalize_choice(comparison.get("target_option"))
-    selected_text = (
-        str(comparison.get("option_a_text") or "")
-        if forced_choice == "A"
-        else str(comparison.get("option_b_text") or "")
+    forced_choice = labels[int(np.argmax(scores))]
+    target = normalize_verdict(comparison.get("target_option"), labels=labels)
+    selected_text_by_label = {
+        "A": str(comparison.get("option_a_text") or ""),
+        "B": str(comparison.get("option_b_text") or ""),
+        "C": "__TIE__",
+    }
+    selected_text = selected_text_by_label.get(forced_choice, forced_choice)
+    target_text = selected_text_by_label.get(target, target)
+    ordered_probabilities = np.sort(probabilities)[::-1]
+    confidence = float(
+        ordered_probabilities[0] - ordered_probabilities[1]
+        if len(ordered_probabilities) >= 2
+        else ordered_probabilities[0]
     )
     budget_eval_id = sha1_hex(
         f"{trace_id}|{mode}|{budget_tokens}|{available_prefix_tokens}"
@@ -236,10 +248,20 @@ def _verdict_row(
         "branch_seed": int(branch_seed),
         "budget_tokens": int(budget_tokens),
         "available_prefix_tokens": int(available_prefix_tokens),
-        "natural_choice_at_budget": normalize_choice(natural_choice),
-        "natural_valid_at_budget": bool(normalize_choice(natural_choice)),
-        "full_natural_choice": normalize_choice(full_natural_choice),
-        "full_natural_valid": bool(normalize_choice(full_natural_choice)),
+        "natural_choice_at_budget": normalize_verdict(
+            natural_choice,
+            labels=labels,
+        ),
+        "natural_valid_at_budget": bool(
+            normalize_verdict(natural_choice, labels=labels)
+        ),
+        "full_natural_choice": normalize_verdict(
+            full_natural_choice,
+            labels=labels,
+        ),
+        "full_natural_valid": bool(
+            normalize_verdict(full_natural_choice, labels=labels)
+        ),
         "full_generated_tokens": int(full_generated_tokens),
         "generation_finished_before_budget": bool(
             int(full_generated_tokens) < int(budget_tokens)
@@ -248,16 +270,26 @@ def _verdict_row(
         "forced_choice": forced_choice,
         "forced_margin_a_minus_b": margin,
         "forced_prob_a": float(probabilities[0]),
-        "forced_choice_confidence": float(abs(probabilities[0] - probabilities[1])),
+        "forced_prob_b": float(probabilities[1]),
+        "forced_prob_c": (
+            float(probabilities[2]) if len(probabilities) >= 3 else None
+        ),
+        "forced_choice_confidence": confidence,
         "forced_target_selected": (
             None if not target else bool(forced_choice == target)
         ),
         "natural_target_selected": (
             None
-            if not target or not normalize_choice(natural_choice)
-            else bool(normalize_choice(natural_choice) == target)
+            if not target
+            or not normalize_verdict(natural_choice, labels=labels)
+            else bool(
+                normalize_verdict(natural_choice, labels=labels) == target
+            )
         ),
         "forced_selected_text_hash": sha1_hex(selected_text),
+        "target_selected_text_hash": (
+            sha1_hex(target_text) if target_text else ""
+        ),
     }
 
 
@@ -366,8 +398,11 @@ def main() -> None:
                 branch_seed=direct_seed,
                 budget_tokens=0,
                 available_prefix_tokens=0,
-                natural_choice=parse_final_choice(direct_text),
-                full_natural_choice=parse_final_choice(direct_text),
+                natural_choice=parse_final_verdict(direct_text, labels=labels),
+                full_natural_choice=parse_final_verdict(
+                    direct_text,
+                    labels=labels,
+                ),
                 full_generated_tokens=len(direct_tokens),
                 max_budget_saturated=direct_saturated,
                 logits=direct_logits,
@@ -430,7 +465,7 @@ def main() -> None:
                 max_length=int(args.max_score_length),
                 batch_size=int(args.score_batch_size),
             )
-            full_choice = parse_final_choice(response_text)
+            full_choice = parse_final_verdict(response_text, labels=labels)
             score_rows: list[dict[str, Any]] = []
             for budget, prefix, current_logits in zip(
                 budgets,
@@ -449,7 +484,7 @@ def main() -> None:
                     branch_seed=branch_seed,
                     budget_tokens=int(budget),
                     available_prefix_tokens=available,
-                    natural_choice=parse_final_choice(prefix),
+                    natural_choice=parse_final_verdict(prefix, labels=labels),
                     full_natural_choice=full_choice,
                     full_generated_tokens=len(token_ids),
                     max_budget_saturated=saturated,

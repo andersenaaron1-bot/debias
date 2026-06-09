@@ -13,7 +13,7 @@ import pandas as pd
 
 from aisafety.config import DEFAULT_SEED, PROJECT_ROOT
 from aisafety.mech.d4_io import read_json, read_jsonl, resolve_path, write_json
-from aisafety.mech.judge_reasoning import normalize_choice
+from aisafety.mech.judge_reasoning import normalize_verdict
 
 
 DEFAULT_RUN_DIR = (
@@ -70,9 +70,14 @@ def prepare_scores(rows: list[dict[str, Any]]) -> pd.DataFrame:
     frame["origin_pair_id"] = (
         frame["origin_pair_id"].fillna(frame["pair_id"]).astype(str)
     )
-    frame["forced_choice"] = frame["forced_choice"].map(normalize_choice)
-    frame["target_option"] = frame["target_option"].map(normalize_choice)
-    frame["scored"] = frame["target_option"].isin(["A", "B"])
+    labels = ("A", "B", "C")
+    frame["forced_choice"] = frame["forced_choice"].map(
+        lambda value: normalize_verdict(value, labels=labels)
+    )
+    frame["target_option"] = frame["target_option"].map(
+        lambda value: normalize_verdict(value, labels=labels)
+    )
+    frame["scored"] = frame["target_option"].isin(labels)
     frame["forced_target_selected_numeric"] = np.where(
         frame["scored"],
         frame["forced_choice"].eq(frame["target_option"]).astype(float),
@@ -130,6 +135,12 @@ def branch_rows(frame: pd.DataFrame) -> pd.DataFrame:
                 "n_branches": int(len(group)),
                 "majority_choice": majority,
                 "majority_selected_text_hash": selected_hash,
+                "target_selected_text_hash": str(
+                    group["target_selected_text_hash"].dropna().iloc[0]
+                )
+                if "target_selected_text_hash" in group
+                and not group["target_selected_text_hash"].dropna().empty
+                else "",
                 "branch_agreement": (
                     float(majority_count / len(group))
                     if len(group)
@@ -170,6 +181,14 @@ def order_rows(branches: pd.DataFrame) -> pd.DataFrame:
             group["majority_selected_text_hash"].fillna("").astype(str).ne("")
         ]
         hashes = valid["majority_selected_text_hash"].astype(str).tolist()
+        consistent_hash = (
+            hashes[0] if len(hashes) >= 2 and len(set(hashes)) == 1 else ""
+        )
+        target_hashes = (
+            group["target_selected_text_hash"].dropna().astype(str).tolist()
+            if "target_selected_text_hash" in group
+            else []
+        )
         rows.append(
             {
                 **dict(zip(group_columns, keys, strict=True)),
@@ -179,6 +198,12 @@ def order_rows(branches: pd.DataFrame) -> pd.DataFrame:
                     float(len(set(hashes)) == 1)
                     if len(hashes) >= 2
                     else float("nan")
+                ),
+                "order_majority_selected_text_hash": consistent_hash,
+                "target_selected_text_hash": (
+                    target_hashes[0]
+                    if target_hashes and len(set(target_hashes)) == 1
+                    else ""
                 ),
                 "mean_branch_agreement": float(group["branch_agreement"].mean()),
                 "mean_branch_entropy": float(group["branch_entropy"].mean()),

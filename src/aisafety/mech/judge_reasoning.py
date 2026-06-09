@@ -20,6 +20,14 @@ FINAL_CHOICE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 BARE_CHOICE_RE = re.compile(r"^\s*([AB])\s*[.!]?\s*$", flags=re.IGNORECASE | re.MULTILINE)
+FINAL_VERDICT_RE = re.compile(
+    r"(?:FINAL(?:\s+ANSWER|\s+CHOICE)?|ANSWER|CHOICE|VERDICT)\s*[:\-]\s*([A-Z]+)\b",
+    flags=re.IGNORECASE,
+)
+BARE_VERDICT_RE = re.compile(
+    r"^\s*([A-Z]+)\s*[.!]?\s*$",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,12 @@ def normalize_choice(value: Any) -> str:
     return text if text in {"A", "B"} else ""
 
 
+def normalize_verdict(value: Any, *, labels: Iterable[str]) -> str:
+    allowed = {str(label).strip().upper() for label in labels if str(label).strip()}
+    text = str(value or "").strip().upper()
+    return text if text in allowed else ""
+
+
 def opposite_choice(value: str) -> str:
     choice = normalize_choice(value)
     if choice == "A":
@@ -91,6 +105,24 @@ def parse_final_choice(text: str) -> str:
     return str(matches[-1]).upper() if matches else ""
 
 
+def parse_final_verdict(text: str, *, labels: Iterable[str]) -> str:
+    """Parse an explicit verdict from an arbitrary finite label set."""
+
+    allowed = [str(label).strip().upper() for label in labels if str(label).strip()]
+    matches = FINAL_VERDICT_RE.findall(str(text or ""))
+    for match in reversed(matches):
+        verdict = normalize_verdict(match, labels=allowed)
+        if verdict:
+            return verdict
+    tail = str(text or "").strip()[-80:]
+    matches = BARE_VERDICT_RE.findall(tail)
+    for match in reversed(matches):
+        verdict = normalize_verdict(match, labels=allowed)
+        if verdict:
+            return verdict
+    return ""
+
+
 def comparison_prompt_content(
     row: dict[str, Any],
     *,
@@ -103,6 +135,7 @@ def comparison_prompt_content(
     option_a = str(row.get("option_a_text") or "").strip()
     option_b = str(row.get("option_b_text") or "").strip()
     metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    allow_tie = bool(row.get("allow_tie") or metadata.get("allow_tie"))
     criterion_text = str(
         row.get("criterion_text")
         or metadata.get("criterion_text")
@@ -120,12 +153,19 @@ def comparison_prompt_content(
         f"Option A:\n{option_a}\n\n"
         f"Option B:\n{option_b}\n\n"
     )
+    verdict_instruction = (
+        "Return exactly one line: FINAL: A, FINAL: B, or FINAL: C. "
+        "Use C only when the decision rule leaves the options tied or "
+        "underdetermined."
+        if allow_tie
+        else "Return exactly one line: FINAL: A or FINAL: B."
+    )
     if str(reasoning_mode) == "direct":
-        return base + "Return exactly one line: FINAL: A or FINAL: B."
+        return base + verdict_instruction
     return (
         base
         + "Analyze the evidence for both options before deciding. Do not infer quality from option "
-        "position. End with exactly one line: FINAL: A or FINAL: B."
+        f"position. {verdict_instruction}"
     )
 
 

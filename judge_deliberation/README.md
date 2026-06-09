@@ -35,6 +35,8 @@ The behavioral budget sweep and its analysis are:
 ```bash
 python -m aisafety.scripts.run_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
+python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
+python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
 ```
 
 The later activation pass uses:
@@ -59,6 +61,19 @@ cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_scout_v1 GPU=7 MAX_P
 Targeted incremental scouts can set `INCLUDE_DATASETS` to a comma-separated
 allowlist of dataset IDs from the progression config. Each targeted run must
 use a distinct `RUN_TAG`.
+
+The first within-pair criterion evidence collector uses the same HelpSteer2
+response pairs under overall, correctness, helpfulness, coherence, and fixed
+weighted rules. It permits `C` for tied or underdetermined decisions, keeps
+both response orders together, and runs two balanced shards on GPUs 0 and 1:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=helpsteer2_matched_criterion_qwen3_8b_scout_v1 GPU_0=0 GPU_1=1 MAX_PAIRS_PER_STRATUM=8 BRANCHES_PER_COMPARISON=2 BUDGET_TOKENS=0,128,512,1024 bash cluster/local/run_helpsteer2_matched_criterion_qwen3_8b.sh
+```
+
+This collector estimates compliance with an explicit decision rule on fixed
+texts. It does not establish a universal ground-truth ranking for evaluative
+answers.
 
 After the scout validates the design, the confirmation run is:
 
