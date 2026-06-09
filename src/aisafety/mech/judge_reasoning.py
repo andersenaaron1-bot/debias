@@ -102,8 +102,20 @@ def comparison_prompt_content(
     prompt = str(row.get("prompt") or "Compare the two options.").strip()
     option_a = str(row.get("option_a_text") or "").strip()
     option_b = str(row.get("option_b_text") or "").strip()
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    criterion_text = str(
+        row.get("criterion_text")
+        or metadata.get("criterion_text")
+        or ""
+    ).strip()
+    criterion = (
+        f"Decision rule:\n{criterion_text}\n\n"
+        if criterion_text
+        else ""
+    )
     base = (
         f"Evaluate the two options on the dimension: {dimension}.\n\n"
+        f"{criterion}"
         f"Context or question:\n{prompt}\n\n"
         f"Option A:\n{option_a}\n\n"
         f"Option B:\n{option_b}\n\n"

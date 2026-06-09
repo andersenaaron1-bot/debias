@@ -1,0 +1,155 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage[numbers]{natbib}
+
+\title{When Does Deliberation Improve an LLM Judge?}
+\author{Working research draft}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Reasoning models spend substantially more inference-time computation before
+answering difficult questions, but an evaluator does not always have a
+verifiable objective that tells it when its reasoning is complete. We study
+how native inference-time deliberation changes pairwise decisions as the
+decision criterion moves from exact and factual verification to consensus
+judgments, multi-attribute preferences, and open-ended human-versus-LLM
+evaluation. Our initial Qwen3-8B results suggest a domain-dependent tradeoff:
+thinking corrects some factual mistakes, while evaluative decisions consume
+more tokens, fail to terminate more often, and do not reliably become more
+branch-consistent. The planned experiments cross token budgets with
+within-pair criterion interventions, then trace decision evidence with fixed
+held-out activation decoders. The intended contribution is a characterization
+of when additional inference-time computation functions as useful
+verification and when it becomes prolonged search without a determinate
+stopping rule.
+\end{abstract}
+
+\section{The Paper Story}
+
+Chain-of-thought is not uniformly useful. Broad evaluations find its clearest
+benefits on mathematical and symbolic tasks \citep{sprague2024tocot}, while
+other work identifies tasks on which verbal deliberation can reduce
+performance \citep{liu2024mindstep}. Native reasoning models make this question
+more consequential because they allocate hundreds or thousands of tokens
+without an external verifier deciding when enough computation has occurred.
+Qwen3 is a useful substrate because the same post-trained checkpoint exposes
+native thinking and non-thinking modes \citep{qwen2025qwen3}.
+
+LLM judging is a particularly sharp test case. Some judge decisions have
+checkable criteria, such as deciding which proposed answer is factually
+correct. Others ask the model to aggregate helpfulness, correctness, clarity,
+style, and values without specifying a total ordering. Existing judge research
+shows that such decisions are sensitive to response order, prompt framing,
+verbosity, and model identity \citep{zheng2023judging,wang2023position,
+panickssery2024selfrecognition}. Additional deliberation could improve these
+decisions by integrating more evidence. It could instead generate a longer
+rationale around a choice for which no unique verification signal exists.
+
+Our central hypothesis is therefore not that reasoning is generally harmful.
+It is that the return to inference-time computation depends on the
+determinacy of the decision criterion. Exact tasks provide a recognizable
+success condition. Plural judgments may not.
+
+\section{Initial Evidence}
+
+In the first Qwen3-8B scout, native thinking improved majority decisions on ARC
+Challenge and TruthfulQA, including wrong-to-correct transitions without
+corresponding correct-to-wrong majority transitions. The same condition
+generated much longer traces on HelpSteer2 tradeoffs, D4 human-versus-LLM
+pairs, and ETHICS Commonsense. It also produced substantially more
+budget-saturated invalid outputs. Branch agreement did not improve reliably.
+
+This is suggestive but insufficient. The current result confounds criterion
+determinacy, ordinary difficulty, and a finite output budget. It also measures
+natural termination rather than the decision the model would make if stopped
+at a controlled prefix. The next experiment addresses both limitations.
+
+\section{Experiment 1: Budgeted Deliberation}
+
+We construct a progression from mathematical verification and logical
+deduction through factual and consensus decisions to dominated preferences,
+attribute-level tradeoffs, overall-quality tradeoffs, and ecological
+human-versus-LLM judgments. For every sampled reasoning branch, we generate one
+maximal native thinking trace. We then truncate that same trace at fixed token
+budgets, close the reasoning block, and score an A/B verdict. This design
+separates the information gained from additional reasoning from independent
+sampling noise across budget conditions.
+
+The primary result is a budget-by-task interaction. For exact and factual
+tasks, useful deliberation should increase target accuracy and then plateau.
+For underspecified judgments, the criterion-uncertainty hypothesis predicts
+longer natural traces and lower termination without comparable improvements in
+order consistency, branch agreement, or defensible target performance.
+
+\section{Experiment 2: Criterion Rescue}
+
+Task categories alone cannot show that the criterion causes the difference.
+We therefore hold HelpSteer2 and D4 response pairs fixed while changing the
+decision rule. The model judges the same pair by overall quality, correctness,
+helpfulness, coherence or clarity, and an explicit weighted rubric.
+HelpSteer2's attribute annotations provide criterion-specific proxy targets.
+D4 remains unlabeled but supports termination, consistency, and authorship
+analyses.
+
+A criterion-rescue result would show that explicit decision rules shorten
+reasoning, reduce budget saturation, or improve stability relative to an
+overall-quality judgment on the same texts. This would distinguish criterion
+uncertainty from subject matter and text difficulty.
+
+\section{Experiment 3: Decision Formation}
+
+Visible reasoning is not assumed to faithfully report the computation that
+caused the answer \citep{lanham2023faithfulness}. The mechanistic analysis asks
+when final-choice and criterion information become linearly recoverable from
+residual states. Unlike point-specific probes, the paper-facing analysis trains
+a decoder only on endpoint states, selects it on separate pairs, freezes it,
+and applies it across earlier states on held-out pairs. This creates a
+comparable evidence scale across generated-token positions.
+
+The descriptive outcomes are evidence emergence, persistent commitment,
+revisions, confidence velocity, path efficiency, and branch convergence. A
+particularly relevant pattern would be stable choice evidence before stable
+criterion evidence on underspecified judgments. That pattern remains
+associational until replay interventions with sign-reversed and random
+orthogonal controls change final verdicts.
+
+\section{Replication and Scope}
+
+The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the
+preferred scale replication because it supports the same native
+thinking/non-thinking interface while activating relatively few parameters.
+Qwen3-32B supplies a dense same-family check. Phi-4-reasoning-plus can provide
+a cross-family replication after the behavioral estimands are fixed.
+Reasoning-specialized checkpoints are post-trained systems, so the main
+comparison is inference mode and criterion structure rather than a claim that
+pretrained base models expose the same reasoning policy.
+
+\section{Claim Ledger}
+
+\begin{description}[leftmargin=3.2cm,style=nextline]
+\item[Motivated]
+Thinking benefits some factual controls but creates more nontermination on
+evaluative tasks in Qwen3-8B.
+\item[Not established]
+The effect is caused by criterion uncertainty rather than finite budget,
+difficulty, or prompt format.
+\item[Required]
+Budget curves, criterion rescue, one approximately 30B replication, and fixed
+held-out trajectory decoders.
+\item[Causal gate]
+Only controlled activation replay can support a claim that an early decoded
+direction influences the final verdict.
+\end{description}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+\end{document}

@@ -31,6 +31,11 @@ The repository also supports a bounded, model-internal study of how
 open-weight LLM judges form decisions. This is an adjacent diagnostic track,
 not a replacement for the active D4 atom-to-bundle path.
 
+The executable claim sequence for token-budget, criterion-determinacy, fixed
+decoder, and replication experiments is maintained in
+`judge_deliberation/EXPERIMENT_CHARTA.md`. The accompanying loose-prose paper
+story is `judge_deliberation/paper_story.tex`.
+
 The motivating questions are:
 
 1. when does a final A/B verdict become linearly recoverable during generated

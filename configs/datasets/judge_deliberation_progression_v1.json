@@ -1,0 +1,159 @@
+{
+  "suite_id": "judge_deliberation_progression_v1",
+  "description": "Controlled progression from exact verification to criterion-resolved and underspecified pairwise judgment.",
+  "datasets": [
+    {
+      "dataset_id": "gsm8k_verification",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/gsm8k_verification.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "solution_correctness",
+      "task_type": "formal_verification",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "math500_verification",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/math500_verification.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "solution_correctness",
+      "task_type": "formal_verification",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "bbh_logical_deduction",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/bbh_logical_deduction.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "logical_correctness",
+      "task_type": "formal_verification",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "arc_challenge",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/arc_challenge.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "factual_correctness",
+      "task_type": "ordered_factual_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "truthfulqa",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/truthfulqa_binary.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "truthfulness",
+      "task_type": "ordered_factual_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "ethics_commonsense",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/ethics_commonsense_hard.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "moral_acceptability",
+      "task_type": "consensus_judgment",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_dominated",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_dominated.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "ordered_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff_overall",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_tradeoff_overall.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "non_ordered_attribute",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff_correctness",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_tradeoff_correctness.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "correctness",
+      "task_type": "criterion_conditioned_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff_helpfulness",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_tradeoff_helpfulness.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "helpfulness",
+      "task_type": "criterion_conditioned_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff_coherence",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_tradeoff_coherence.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "coherence",
+      "task_type": "criterion_conditioned_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "helpsteer2_tradeoff_weighted",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/helpsteer2_tradeoff_weighted.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "weighted_quality",
+      "task_type": "criterion_conditioned_preference",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm_overall",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/d4_human_llm_overall.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "overall_quality",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm_correctness",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/d4_human_llm_correctness.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "correctness",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm_helpfulness",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/d4_human_llm_helpfulness.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "helpfulness",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm_coherence",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/d4_human_llm_coherence.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "coherence",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    },
+    {
+      "dataset_id": "d4_human_llm_weighted",
+      "input_jsonl": "data/derived/judge_deliberation_sources_v1/d4_human_llm_weighted.jsonl",
+      "input_format": "generic",
+      "comparison_dimension": "weighted_quality",
+      "task_type": "human_vs_llm_quality",
+      "required": true,
+      "include_order_swaps": true
+    }
+  ]
+}

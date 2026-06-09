@@ -216,6 +216,10 @@ python -m aisafety.scripts.build_judge_reasoning_suite --help
 python -m aisafety.scripts.run_judge_reasoning_trajectories --help
 python -m aisafety.scripts.analyze_judge_reasoning_trajectories --help
 python -m aisafety.scripts.analyze_judge_reasoning_mode_contrasts --help
+python -m aisafety.scripts.build_judge_deliberation_source_pack --help
+python -m aisafety.scripts.run_judge_reasoning_budget_sweep --help
+python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
+python -m aisafety.scripts.analyze_judge_reasoning_fixed_decoders --help
 python -m aisafety.scripts.run_judge_reasoning_interventions --help
 python -m aisafety.scripts.summarize_judge_reasoning_suite --help
 ```
