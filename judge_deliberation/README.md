@@ -50,14 +50,32 @@ LRZ scout submission:
 cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_scout_v1 MAX_PAIRS_PER_DATASET=30 BRANCHES_PER_COMPARISON=3 bash cluster/lrz/submit_judge_deliberation_qwen3_8b_budget.sh
 ```
 
+ipe-monster scout:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_scout_v1 GPU=7 MAX_PAIRS_PER_DATASET=30 BRANCHES_PER_COMPARISON=3 bash cluster/local/run_judge_deliberation_qwen3_8b_budget.sh
+```
+
 After the scout validates the design, the confirmation run is:
 
 ```bash
 cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_confirm_v1 MAX_PAIRS_PER_DATASET=60 BRANCHES_PER_COMPARISON=5 bash cluster/lrz/submit_judge_deliberation_qwen3_8b_budget.sh
 ```
 
+The corresponding ipe-monster confirmation command is:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_confirm_v1 GPU=7 MAX_PAIRS_PER_DATASET=60 BRANCHES_PER_COMPARISON=5 bash cluster/local/run_judge_deliberation_qwen3_8b_budget.sh
+```
+
 Submit activation capture only after freezing the confirmation suite:
 
 ```bash
 cd "$WORKDIR" && SUITE_DIR="$ARTROOT/data/derived/judge_deliberation_suite_judge_deliberation_qwen3_8b_budget_confirm_v1" RUN_TAG=judge_deliberation_qwen3_8b_activations_v1 bash cluster/lrz/submit_judge_deliberation_qwen3_8b_activations.sh
+```
+
+On ipe-monster:
+
+```bash
+cd "$WORKDIR" && SUITE_DIR="$ARTROOT/data/derived/judge_deliberation_suite_judge_deliberation_qwen3_8b_budget_confirm_v1" RUN_TAG=judge_deliberation_qwen3_8b_activations_v1 GPU=7 bash cluster/local/run_judge_deliberation_qwen3_8b_activations.sh
 ```
