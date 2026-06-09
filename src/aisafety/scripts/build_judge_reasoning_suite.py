@@ -31,6 +31,11 @@ def _parse_args() -> argparse.Namespace:
         help="Root used for relative input_jsonl paths; defaults to workspace-root.",
     )
     parser.add_argument("--skip-missing", action="store_true")
+    parser.add_argument(
+        "--include-datasets",
+        default="",
+        help="Optional comma-separated dataset_id allowlist.",
+    )
     parser.add_argument("--max-pairs-per-dataset", type=int, default=0)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
@@ -67,6 +72,7 @@ def build_suite(
     workspace_root: Path,
     input_root: Path | None = None,
     skip_missing: bool,
+    include_datasets: set[str] | None = None,
     max_pairs_per_dataset: int,
     seed: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -75,6 +81,19 @@ def build_suite(
     specs = config.get("datasets") or []
     if not isinstance(specs, list) or not specs:
         raise ValueError("Suite config requires a nonempty datasets list.")
+    included = {
+        str(value).strip()
+        for value in (include_datasets or set())
+        if str(value).strip()
+    }
+    available = {
+        str(spec.get("dataset_id") or "").strip()
+        for spec in specs
+        if isinstance(spec, dict)
+    }
+    unknown = sorted(included - available)
+    if unknown:
+        raise ValueError(f"Unknown --include-datasets values: {unknown}")
 
     for spec in specs:
         if not isinstance(spec, dict):
@@ -83,6 +102,8 @@ def build_suite(
         input_value = str(spec.get("input_jsonl") or "").strip()
         if not dataset_id or not input_value:
             raise ValueError("Each dataset requires dataset_id and input_jsonl.")
+        if included and dataset_id not in included:
+            continue
         input_path = _resolve(input_root or workspace_root, input_value)
         if not input_path.is_file():
             if not skip_missing and bool(spec.get("required", True)):
@@ -186,11 +207,17 @@ def main() -> None:
     )
     out_dir = _resolve(workspace_root, args.out_dir)
     config = read_json(config_path)
+    include_datasets = {
+        value.strip()
+        for value in str(args.include_datasets).split(",")
+        if value.strip()
+    }
     comparisons, dataset_rows = build_suite(
         config,
         workspace_root=workspace_root,
         input_root=input_root,
         skip_missing=bool(args.skip_missing),
+        include_datasets=include_datasets,
         max_pairs_per_dataset=int(args.max_pairs_per_dataset),
         seed=int(args.seed),
     )
@@ -215,6 +242,7 @@ def main() -> None:
             "datasets_jsonl": str(dataset_path),
             "seed": int(args.seed),
             "skip_missing": bool(args.skip_missing),
+            "include_datasets": sorted(include_datasets),
             "n_datasets": int(sum(row["status"] == "ok" for row in dataset_rows)),
             "n_pairs": int(len({row["pair_id"] for row in comparisons})),
             "n_comparisons": int(len(comparisons)),

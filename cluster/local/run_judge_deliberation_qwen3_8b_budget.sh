@@ -22,6 +22,7 @@ LOG_DIR="${LOG_DIR:-$OUT_ROOT/logs}"
 
 MAX_SOURCE_PAIRS="${MAX_SOURCE_PAIRS:-200}"
 MAX_PAIRS_PER_DATASET="${MAX_PAIRS_PER_DATASET:-30}"
+INCLUDE_DATASETS="${INCLUDE_DATASETS:-}"
 BRANCHES_PER_COMPARISON="${BRANCHES_PER_COMPARISON:-3}"
 BUDGET_TOKENS="${BUDGET_TOKENS:-0,128,256,512,1024,2048}"
 MAX_PAIRS="${MAX_PAIRS:-0}"
@@ -70,6 +71,7 @@ echo "  budget_dir=$BUDGET_DIR"
 echo "  budgets=$BUDGET_TOKENS"
 echo "  branches_per_comparison=$BRANCHES_PER_COMPARISON"
 echo "  max_pairs_per_dataset=$MAX_PAIRS_PER_DATASET"
+echo "  include_datasets=${INCLUDE_DATASETS:-all}"
 echo "  logs=$LOG_DIR"
 
 run_logged() {
@@ -130,14 +132,19 @@ build_suite() {
     echo "skip existing comparison suite -> $SUITE_DIR"
     return 0
   fi
-  run_logged build_suite \
-    "$PYTHON" -m aisafety.scripts.build_judge_reasoning_suite \
+  local args=(
+    "$PYTHON" -m aisafety.scripts.build_judge_reasoning_suite
     --workspace-root "$WORKDIR" \
     --input-root "$ARTROOT" \
     --config "$CONFIG" \
     --max-pairs-per-dataset "$MAX_PAIRS_PER_DATASET" \
     --seed "$SEED" \
     --out-dir "$SUITE_DIR"
+  )
+  if [[ -n "$INCLUDE_DATASETS" ]]; then
+    args+=(--include-datasets "$INCLUDE_DATASETS")
+  fi
+  run_logged build_suite "${args[@]}"
 }
 
 run_budget_sweep() {

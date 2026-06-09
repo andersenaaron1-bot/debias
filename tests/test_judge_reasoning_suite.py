@@ -120,6 +120,54 @@ class JudgeReasoningSuiteTests(unittest.TestCase):
             self.assertEqual(comparisons[0]["metadata"]["validity_type"], "preference")
             self.assertEqual(comparisons[0]["metadata"]["difficulty_tier"], "mixed")
 
+    def test_suite_dataset_allowlist_excludes_unselected_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("first", "second"):
+                (root / f"{name}.jsonl").write_text(
+                    json.dumps(
+                        {
+                            "pair_id": name,
+                            "chosen": f"{name} good",
+                            "rejected": f"{name} bad",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            config = {
+                "datasets": [
+                    {
+                        "dataset_id": name,
+                        "input_jsonl": f"{name}.jsonl",
+                        "input_format": "preference",
+                    }
+                    for name in ("first", "second")
+                ]
+            }
+            comparisons, datasets = build_suite(
+                config,
+                workspace_root=root,
+                input_root=root,
+                skip_missing=False,
+                include_datasets={"second"},
+                max_pairs_per_dataset=0,
+                seed=1234,
+            )
+            self.assertEqual({row["source_dataset"] for row in comparisons}, {"second"})
+            self.assertEqual([row["dataset_id"] for row in datasets], ["second"])
+
+    def test_suite_dataset_allowlist_rejects_unknown_ids(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unknown --include-datasets"):
+            build_suite(
+                {"datasets": [{"dataset_id": "known", "input_jsonl": "known.jsonl"}]},
+                workspace_root=Path("."),
+                skip_missing=True,
+                include_datasets={"typo"},
+                max_pairs_per_dataset=0,
+                seed=1234,
+            )
+
     def test_choice_parser_requires_explicit_tail_verdict(self) -> None:
         self.assertEqual(parse_final_choice("Option A is stronger.\nFINAL: B"), "B")
         self.assertEqual(parse_final_choice("Reasoning only mentions A and B."), "")

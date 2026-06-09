@@ -56,6 +56,10 @@ ipe-monster scout:
 cd "$WORKDIR" && RUN_TAG=judge_deliberation_qwen3_8b_budget_scout_v1 GPU=7 MAX_PAIRS_PER_DATASET=30 BRANCHES_PER_COMPARISON=3 bash cluster/local/run_judge_deliberation_qwen3_8b_budget.sh
 ```
 
+Targeted incremental scouts can set `INCLUDE_DATASETS` to a comma-separated
+allowlist of dataset IDs from the progression config. Each targeted run must
+use a distinct `RUN_TAG`.
+
 After the scout validates the design, the confirmation run is:
 
 ```bash
