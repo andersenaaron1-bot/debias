@@ -20,6 +20,7 @@ from aisafety.scripts.run_judge_criterion_switch_activations import (
 from aisafety.scripts.run_judge_criterion_switch_behavior import (
     _semantic_verdict,
 )
+from aisafety.scripts.run_judge_criterion_switch_patching import _paired
 
 
 def _row(prompt: str, response: str, values: tuple[float, ...]) -> dict:
@@ -168,6 +169,21 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         center, model = _fit(x, labels, c_value=10.0, seed=1234)
         metrics = _metrics(model, center, x, labels)
         self.assertGreaterEqual(metrics["balanced_accuracy"], 0.99)
+
+    def test_patching_pairs_preserve_placebo_control(self) -> None:
+        common = {
+            "pair_id": "pair",
+            "presentation_order": "original",
+            "branch_index": 0,
+            "analysis_split": "intervention",
+        }
+        rows = [
+            {**common, "condition_id": condition, "trace_id": condition}
+            for condition in ("reminder", "switch", "placebo")
+        ]
+        pairs = _paired(rows, analysis_split="intervention")
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0]["placebo"]["trace_id"], "placebo")
 
 
 if __name__ == "__main__":

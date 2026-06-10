@@ -122,6 +122,7 @@ def _paired(rows: list[dict[str, Any]], *, analysis_split: str) -> list[dict[str
                     "key": key,
                     "reminder": conditions["reminder"],
                     "switch": conditions["switch"],
+                    "placebo": conditions.get("placebo"),
                 }
             )
     return pairs
@@ -173,26 +174,37 @@ def main() -> None:
         raise ValueError("No matched reminder/switch activation pairs found.")
     state_index = StateIndex(trace_dirs)
     for pair in pairs:
+        reminder_state = state_index.state(
+            str(pair["reminder"]["trace_id"]),
+            hidden_layer=hidden_layer,
+            point_name=str(args.point_name),
+        )
         pair["delta"] = (
             state_index.state(
                 str(pair["switch"]["trace_id"]),
                 hidden_layer=hidden_layer,
                 point_name=str(args.point_name),
             )
-            - state_index.state(
-                str(pair["reminder"]["trace_id"]),
+            - reminder_state
+        )
+        pair["placebo_delta"] = (
+            state_index.state(
+                str(pair["placebo"]["trace_id"]),
                 hidden_layer=hidden_layer,
                 point_name=str(args.point_name),
             )
+            - reminder_state
+            if pair["placebo"] is not None
+            else None
         )
 
     shuffled = pairs[1:] + pairs[:1]
-    placebo_pool = [
+    same_target_pool = [
         pair for pair in pairs
         if str(pair["switch"].get("transition_type")) == "same_target"
     ]
-    if not placebo_pool:
-        placebo_pool = pairs
+    if not same_target_pool:
+        same_target_pool = pairs
     settings: list[tuple[str, float]] = [("baseline", 0.0)]
     settings.extend(("criterion_delta", alpha) for alpha in _floats(args.alphas))
     if bool(args.include_negative):
@@ -203,7 +215,8 @@ def main() -> None:
     if bool(args.include_shuffled):
         settings.append(("shuffled_pair_delta", 1.0))
     if bool(args.include_placebo):
-        settings.append(("same_target_placebo_delta", 1.0))
+        settings.append(("placebo_minus_reminder_delta", 1.0))
+        settings.append(("same_target_criterion_delta", 1.0))
 
     model, tokenizer = _load_lm(args)
     output_rows: list[dict[str, Any]] = []
@@ -218,8 +231,15 @@ def main() -> None:
             elif setting == "shuffled_pair_delta":
                 vector = shuffled[index]["delta"]
                 donor_trace_id = str(shuffled[index]["switch"]["trace_id"])
-            elif setting == "same_target_placebo_delta":
-                donor = placebo_pool[index % len(placebo_pool)]
+            elif setting == "placebo_minus_reminder_delta":
+                vector = pair["placebo_delta"]
+                donor_trace_id = (
+                    str(pair["placebo"]["trace_id"])
+                    if pair["placebo"] is not None
+                    else ""
+                )
+            elif setting == "same_target_criterion_delta":
+                donor = same_target_pool[index % len(same_target_pool)]
                 vector = donor["delta"]
                 donor_trace_id = str(donor["switch"]["trace_id"])
             else:
@@ -231,6 +251,8 @@ def main() -> None:
                 )[:8],
                 16,
             )
+            if vector is None and setting != "baseline":
+                continue
             generated_ids = _generate_continuation(
                 model=model,
                 tokenizer=tokenizer,

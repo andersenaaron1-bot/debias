@@ -39,6 +39,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--run-label", default="")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--use-4bit", action="store_true")
+    parser.add_argument(
+        "--include-conditions",
+        default="",
+        help="Optional comma-separated condition allowlist.",
+    )
     parser.add_argument("--selected-layers", default="")
     parser.add_argument("--layer-stride", type=int, default=4)
     parser.add_argument("--tail-layers", type=int, default=2)
@@ -58,6 +63,10 @@ def _resolve(root: Path, path: Path) -> Path:
     if resolved is None:
         raise ValueError(f"Could not resolve path: {path}")
     return resolved
+
+
+def _csv(raw: str) -> list[str]:
+    return [value.strip() for value in str(raw).split(",") if value.strip()]
 
 
 def _selected_layers(
@@ -160,6 +169,13 @@ def main() -> None:
     behavior_dir = _resolve(workspace_root, args.behavior_dir)
     out_dir = _resolve(workspace_root, args.out_dir)
     traces = read_jsonl(behavior_dir / "switch_traces.jsonl")
+    include_conditions = set(_csv(args.include_conditions))
+    if include_conditions:
+        traces = [
+            row
+            for row in traces
+            if str(row.get("condition_id") or "") in include_conditions
+        ]
     if not traces:
         raise ValueError(f"No switch traces found in {behavior_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -295,6 +311,7 @@ def main() -> None:
             "out_dir": str(out_dir),
             "model_id": str(args.model_id),
             "run_label": str(args.run_label),
+            "include_conditions": sorted(include_conditions),
             "hidden_layers": hidden_layers,
             "point_specs": [
                 {"name": name, "stage": stage, "budget_tokens": budget}

@@ -105,6 +105,13 @@ patching stage applies within-pair switch-minus-reminder differences at the
 selected criterion layer and includes negative, shuffled-pair, and
 same-target controls.
 
+When the scout and non-overlapping extension are both complete, capture only
+the reminder, switch, and placebo conditions and fit a combined decoder:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_combined_v1 GPU_0=1 GPU_1=7 bash cluster/local/run_judge_criterion_switch_qwen3_8b_combined_mech.sh
+```
+
 After the scout validates the design, the confirmation run is:
 
 ```bash
