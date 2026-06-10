@@ -22,6 +22,7 @@ from aisafety.scripts.analyze_judge_reasoning_trajectories import (
 TARGETS = (
     "active_criterion",
     "criterion_target",
+    "current_choice",
     "final_choice",
     "presentation_order",
 )
@@ -103,6 +104,9 @@ def _point_value(row: pd.Series, target: str, point_index: int) -> str:
         return str(values[point_index]) if point_index < len(values) else ""
     if target == "criterion_target":
         values = row.get("point_target_semantics") or []
+        return str(values[point_index]) if point_index < len(values) else ""
+    if target == "current_choice":
+        values = row.get("point_forced_choices_semantic") or []
         return str(values[point_index]) if point_index < len(values) else ""
     if target == "final_choice":
         return str(row.get("decoder_final_choice_semantic") or "")

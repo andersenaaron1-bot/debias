@@ -158,6 +158,20 @@ to update, the criterion updates without a target update, or criterion and
 target update while choice remains anchored. Only the third pattern directly
 supports a rationalization-like dissociation.
 
+The confirmatory readout is taken at the exact forced-verdict boundary after
+closing the reasoning block and appending \texttt{FINAL:}. We distinguish this
+state from the last free-generation token. Decoder hyperparameters are selected
+on frozen fit and selection pairs, while temporal estimates are cross-fitted
+and bootstrapped by source pair so that response-order variants, conditions,
+and sampled branches are not treated as independent observations.
+
+We first calibrate the same readout on completed factual and verification
+traces from ARC Challenge, BBH logical deduction, GSM8K, MATH-500, and
+TruthfulQA at matched token budgets. This comparison does not turn probe
+accuracy into a universal quality score. It establishes the within-model
+recoverability and temporal-transfer pattern obtained when the decision
+criterion has an externally checkable target.
+
 \section{Experiment 3b: Criterion-State Patching}
 
 Descriptive decoding does not establish control. For the same pair, order, and

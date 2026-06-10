@@ -226,6 +226,12 @@ Every point records its active criterion and criterion-implied semantic target.
 The trace also records the final semantic choice. This point-level labeling is
 required because criterion and target can change within one trace.
 
+The paper-facing artifact additionally captures the exact forced-decision
+readout state after the reasoning prefix is closed and the prompt ends in
+`FINAL:`. Raw generated-prefix states and decision-readout states are reported
+separately. This distinguishes information present during free generation from
+information available at the actual behavioral measurement boundary.
+
 ### Fixed held-out decoders
 
 Fit pair-split endpoint decoders for:
@@ -239,6 +245,29 @@ Select layer and regularization only on selection pairs, then freeze the
 decoder and apply it to all time points on intervention pairs. The central
 descriptive quantities are criterion-update latency, target-update latency,
 choice-update latency, and the target-to-choice utilization gap.
+
+Hyperparameters are selected on the frozen fit and selection pairs. Reported
+temporal metrics are then cross-fitted by source pair within the untouched
+intervention split. Order swaps, conditions, and sampled branches from one pair
+remain in the same fold. Confidence intervals resample pairs rather than
+traces. A switch-minus-reminder analysis applies the same decoder protocol to
+within-pair activation differences. A pooled fit-plus-intervention result may
+be emitted as an explicitly exploratory sensitivity analysis, not as the
+confirmatory estimate.
+
+### Factual readout calibration
+
+Before interpreting HelpSteer2 decoder magnitude, replay the completed
+Qwen3-8B budget traces for ARC Challenge, BBH logical deduction, GSM8K
+verification, MATH-500 verification, and TruthfulQA. Capture the exact
+`FINAL:` readout states at 0, 128, 512, and 2048 generated tokens and run the
+same pair-grouped temporal analysis for criterion, target, current choice,
+final choice, and presentation order.
+
+This baseline does not define a universal mechanistic threshold. It provides a
+within-model reference for how strongly verifiable targets and evolving
+decisions are linearly recoverable under the same readout construction,
+layers, folds, and token budgets.
 
 ### Same-pair criterion patching
 

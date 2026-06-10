@@ -14,12 +14,16 @@ GPU_1="${GPU_1:-7}"
 SOURCE_TAGS="${SOURCE_TAGS:-judge_criterion_switch_qwen3_8b_scout_v1,judge_criterion_switch_qwen3_8b_extension_v1}"
 INCLUDE_CONDITIONS="${INCLUDE_CONDITIONS:-reminder,switch,placebo}"
 SELECTED_LAYERS="${SELECTED_LAYERS:-4,8,12,16,20,24,28,32}"
+POINT_MODE="${POINT_MODE:-raw}"
+MAX_SCORE_LENGTH="${MAX_SCORE_LENGTH:-8192}"
 OUT_ROOT="${OUT_ROOT:-$ARTROOT/artifacts/mechanistic/$RUN_TAG}"
 DECODER_DIR="${DECODER_DIR:-$OUT_ROOT/criterion_decoders}"
+PAIR_ANALYSIS_DIR="${PAIR_ANALYSIS_DIR:-$OUT_ROOT/pair_analysis}"
 LOG_DIR="${LOG_DIR:-$OUT_ROOT/logs}"
 USE_4BIT="${USE_4BIT:-0}"
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 SEED="${SEED:-1234}"
+BOOTSTRAP="${BOOTSTRAP:-1000}"
 
 cd "$WORKDIR"
 export PYTHONUNBUFFERED=1
@@ -60,6 +64,8 @@ run_activation() {
     --cache-dir "$HF_HOME"
     --include-conditions "$INCLUDE_CONDITIONS"
     --selected-layers "$SELECTED_LAYERS"
+    --point-mode "$POINT_MODE"
+    --max-score-length "$MAX_SCORE_LENGTH"
     --shard-size 32
     --compress-shards
     --out-dir "$output_dir"
@@ -93,13 +99,27 @@ if [[ "$SKIP_EXISTING" != "1" || ! -s "$DECODER_DIR/manifest.json" ]]; then
   "$PYTHON" -m aisafety.scripts.analyze_judge_criterion_switch_decoders \
     --workspace-root "$WORKDIR" \
     "${trace_args[@]}" \
-    --targets active_criterion,criterion_target,final_choice,presentation_order \
+    --targets active_criterion,criterion_target,current_choice,final_choice,presentation_order \
     --seed "$SEED" \
     --out-dir "$DECODER_DIR" \
     >"$LOG_DIR/criterion_decoders.out" \
     2>"$LOG_DIR/criterion_decoders.err"
 fi
 
+if [[ "$SKIP_EXISTING" != "1" || ! -s "$PAIR_ANALYSIS_DIR/manifest.json" ]]; then
+  echo "run pair-grouped temporal analysis"
+  "$PYTHON" -m aisafety.scripts.analyze_judge_criterion_switch_pairs \
+    --workspace-root "$WORKDIR" \
+    "${trace_args[@]}" \
+    --targets active_criterion,criterion_target,current_choice,final_choice,presentation_order \
+    --bootstrap "$BOOTSTRAP" \
+    --seed "$SEED" \
+    --out-dir "$PAIR_ANALYSIS_DIR" \
+    >"$LOG_DIR/pair_analysis.out" \
+    2>"$LOG_DIR/pair_analysis.err"
+fi
+
 echo "COMPLETE"
 echo "out_root=$OUT_ROOT"
 echo "decoder_dir=$DECODER_DIR"
+echo "pair_analysis_dir=$PAIR_ANALYSIS_DIR"

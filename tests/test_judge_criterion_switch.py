@@ -1,7 +1,12 @@
 import unittest
 
 import numpy as np
+import pandas as pd
 
+from aisafety.scripts.analyze_judge_criterion_switch_pairs import (
+    _candidate_selection,
+    _cross_fitted_predictions,
+)
 from aisafety.scripts.analyze_judge_criterion_switch_decoders import (
     _fit,
     _metrics,
@@ -14,7 +19,10 @@ from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
 )
 from aisafety.scripts.build_judge_reasoning_source_pack import ATTRIBUTE_NAMES
 from aisafety.scripts.run_judge_criterion_switch_activations import (
+    point_forced_choices,
     point_labels,
+    point_specs,
+    point_step_indices,
     point_token_sequences,
 )
 from aisafety.scripts.run_judge_criterion_switch_behavior import (
@@ -153,6 +161,77 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         )
         self.assertEqual(targets, ["A"] * 3 + ["B"] * 4)
 
+    def test_readout_points_end_at_forced_decision_boundary(self) -> None:
+        class Tokenizer:
+            def decode(self, token_ids, skip_special_tokens=False):
+                del skip_special_tokens
+                return "".join(chr(65 + int(value)) for value in token_ids)
+
+            def __call__(
+                self,
+                text,
+                *,
+                add_special_tokens,
+                truncation,
+                max_length,
+            ):
+                self.last_text = text
+                values = [1] + [ord(value) % 251 for value in text]
+                return {"input_ids": values[:max_length]}
+
+        row = {
+            "phase1_prompt_text": "P1:",
+            "phase1_response_token_ids": [0, 1, 2],
+            "phase1_generated_tokens": 3,
+            "phase2_prompt_text": "P2:",
+            "phase2_response_token_ids": [3, 4, 5, 6],
+            "phase2_generated_tokens": 4,
+            "phase1_criterion_id": "correctness",
+            "phase2_criterion_id": "helpfulness",
+            "phase1_target_semantic": "A",
+            "phase2_target_semantic": "B",
+            "phase1_checkpoints": [
+                {"budget_tokens": 0, "forced_choice_semantic": "A"},
+                {"budget_tokens": 64, "forced_choice_semantic": "B"},
+                {"budget_tokens": 128, "forced_choice_semantic": "B"},
+            ],
+            "phase2_checkpoints": [
+                {"budget_tokens": 0, "forced_choice_semantic": "A"},
+                {"budget_tokens": 32, "forced_choice_semantic": "B"},
+                {"budget_tokens": 128, "forced_choice_semantic": "B"},
+                {"budget_tokens": 384, "forced_choice_semantic": "C"},
+            ],
+        }
+        tokenizer = Tokenizer()
+        sequences = point_token_sequences(
+            row,
+            tokenizer=tokenizer,
+            point_mode="readout",
+            max_score_length=128,
+        )
+        self.assertEqual(len(sequences), 7)
+        self.assertTrue(tokenizer.last_text.endswith("\nFINAL:"))
+        self.assertEqual(
+            [name for name, _stage, _budget in point_specs("readout")],
+            [
+                "phase1_readout_0",
+                "phase1_readout_64",
+                "phase1_readout_128",
+                "phase2_readout_0",
+                "phase2_readout_32",
+                "phase2_readout_128",
+                "phase2_readout_384",
+            ],
+        )
+        self.assertEqual(
+            point_forced_choices(row, point_mode="readout"),
+            ["A", "B", "B", "A", "B", "B", "C"],
+        )
+        np.testing.assert_array_equal(
+            point_step_indices(row, point_mode="readout"),
+            np.asarray([0, 3, 3, 3, 7, 7, 7], dtype=np.int32),
+        )
+
     def test_multiclass_decoder_helpers(self) -> None:
         x = np.asarray(
             [
@@ -169,6 +248,69 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         center, model = _fit(x, labels, c_value=10.0, seed=1234)
         metrics = _metrics(model, center, x, labels)
         self.assertGreaterEqual(metrics["balanced_accuracy"], 0.99)
+
+    def test_pair_cross_fit_keeps_branches_together(self) -> None:
+        rows = []
+        states = []
+        for pair_index in range(30):
+            split = (
+                "fit"
+                if pair_index < 18
+                else "selection"
+                if pair_index < 24
+                else "intervention"
+            )
+            label = "A" if pair_index % 2 == 0 else "B"
+            value = 2.0 if label == "A" else -2.0
+            for branch_index in range(2):
+                rows.append(
+                    {
+                        "trace_id": f"{pair_index}-{branch_index}",
+                        "pair_id": f"pair-{pair_index}",
+                        "analysis_split": split,
+                        "point_names": ["p0", "p1"],
+                        "point_forced_choices_semantic": [label, label],
+                        "condition_id": "switch",
+                        "transition_type": "choice_to_choice",
+                        "presentation_order": "original",
+                        "branch_index": branch_index,
+                    }
+                )
+                states.append(
+                    [
+                        [value, float(branch_index)],
+                        [value * 1.5, float(branch_index)],
+                    ]
+                )
+        frame = pd.DataFrame(rows)
+        point_mask = np.ones((len(frame), 2), dtype=bool)
+        layer_states = {4: np.asarray(states, dtype=np.float32)}
+        _candidates, selected = _candidate_selection(
+            frame=frame,
+            point_mask=point_mask,
+            layer_states=layer_states,
+            targets=["current_choice"],
+            c_values=[0.1],
+            fit_split="fit",
+            selection_split="selection",
+            min_fit_rows=4,
+            min_selection_rows=2,
+            seed=1234,
+        )
+        predictions = _cross_fitted_predictions(
+            frame=frame,
+            point_mask=point_mask,
+            layer_states=layer_states,
+            selected=selected,
+            estimation_splits={"fit", "intervention"},
+            cv_folds=3,
+            min_fold_train_rows=4,
+            seed=1234,
+        )
+        self.assertFalse(predictions.empty)
+        self.assertTrue(
+            predictions.groupby("pair_id")["cv_fold"].nunique().eq(1).all()
+        )
 
     def test_patching_pairs_preserve_placebo_control(self) -> None:
         common = {

@@ -227,7 +227,9 @@ python -m aisafety.scripts.run_judge_criterion_switch_behavior --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 python -m aisafety.scripts.run_judge_criterion_switch_activations --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_decoders --help
+python -m aisafety.scripts.analyze_judge_criterion_switch_pairs --help
 python -m aisafety.scripts.run_judge_criterion_switch_patching --help
+python -m aisafety.scripts.run_judge_factual_readout_activations --help
 python -m aisafety.scripts.analyze_judge_reasoning_fixed_decoders --help
 python -m aisafety.scripts.run_judge_reasoning_interventions --help
 python -m aisafety.scripts.summarize_judge_reasoning_suite --help

@@ -14,10 +14,11 @@ from aisafety.mech.d4_io import read_jsonl, resolve_path, write_json
 from aisafety.mech.judge_reasoning import LastTokenTrajectoryRecorder
 from aisafety.mech.labels import parse_int_list, select_hidden_layers
 from aisafety.scripts.run_d4_bt_stage_contrast import _load_lm
+from aisafety.scripts.run_judge_criterion_switch_behavior import _forced_prompt
 from aisafety.scripts.run_judge_reasoning_trajectories import TraceShardWriter
 
 
-POINT_SPECS = (
+RAW_POINT_SPECS = (
     ("phase1_prompt_end", "phase1", 0),
     ("phase1_64", "phase1", 64),
     ("phase1_128", "phase1", 128),
@@ -26,6 +27,16 @@ POINT_SPECS = (
     ("phase2_128", "phase2", 128),
     ("phase2_384", "phase2", 384),
 )
+READOUT_POINT_SPECS = (
+    ("phase1_readout_0", "phase1", 0),
+    ("phase1_readout_64", "phase1", 64),
+    ("phase1_readout_128", "phase1", 128),
+    ("phase2_readout_0", "phase2", 0),
+    ("phase2_readout_32", "phase2", 32),
+    ("phase2_readout_128", "phase2", 128),
+    ("phase2_readout_384", "phase2", 384),
+)
+POINT_SPECS = RAW_POINT_SPECS
 
 
 def _parse_args() -> argparse.Namespace:
@@ -47,6 +58,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--selected-layers", default="")
     parser.add_argument("--layer-stride", type=int, default=4)
     parser.add_argument("--tail-layers", type=int, default=2)
+    parser.add_argument(
+        "--point-mode",
+        choices=["raw", "readout", "both"],
+        default="raw",
+        help=(
+            "Capture generated-prefix states, exact forced-decision readout "
+            "states ending in FINAL:, or both."
+        ),
+    )
+    parser.add_argument("--max-score-length", type=int, default=8192)
     parser.add_argument("--shard-size", type=int, default=32)
     parser.add_argument("--compress-shards", action="store_true")
     parser.add_argument("--resume", action="store_true")
@@ -88,7 +109,17 @@ def _selected_layers(
     return selected
 
 
-def point_token_sequences(row: dict[str, Any]) -> list[list[int]]:
+def point_specs(point_mode: str) -> tuple[tuple[str, str, int], ...]:
+    if str(point_mode) == "raw":
+        return RAW_POINT_SPECS
+    if str(point_mode) == "readout":
+        return READOUT_POINT_SPECS
+    if str(point_mode) == "both":
+        return RAW_POINT_SPECS + READOUT_POINT_SPECS
+    raise ValueError(f"Unknown point mode: {point_mode}")
+
+
+def _raw_point_token_sequences(row: dict[str, Any]) -> list[list[int]]:
     phase1_prompt = [int(value) for value in row["phase1_prompt_token_ids"]]
     phase1_response = [
         int(value) for value in row["phase1_response_token_ids"]
@@ -108,13 +139,103 @@ def point_token_sequences(row: dict[str, Any]) -> list[list[int]]:
     ]
 
 
-def point_labels(row: dict[str, Any]) -> tuple[list[str], list[str]]:
-    return (
-        [str(row.get("phase1_criterion_id") or "")] * 3
-        + [str(row.get("phase2_criterion_id") or "")] * 4,
-        [str(row.get("phase1_target_semantic") or "")] * 3
-        + [str(row.get("phase2_target_semantic") or "")] * 4,
-    )
+def _readout_point_token_sequences(
+    row: dict[str, Any],
+    *,
+    tokenizer: Any,
+    max_score_length: int,
+) -> list[list[int]]:
+    sequences: list[list[int]] = []
+    for _name, stage, budget in READOUT_POINT_SPECS:
+        prompt = str(row[f"{stage}_prompt_text"])
+        response_ids = [
+            int(value) for value in row[f"{stage}_response_token_ids"]
+        ]
+        prefix = tokenizer.decode(
+            response_ids[: min(int(budget), len(response_ids))],
+            skip_special_tokens=False,
+        )
+        forced = _forced_prompt(prompt, prefix, thinking=True)
+        encoded = tokenizer(
+            forced,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=int(max_score_length),
+        )["input_ids"]
+        sequences.append([int(value) for value in encoded])
+    return sequences
+
+
+def point_token_sequences(
+    row: dict[str, Any],
+    *,
+    tokenizer: Any | None = None,
+    point_mode: str = "raw",
+    max_score_length: int = 8192,
+) -> list[list[int]]:
+    sequences: list[list[int]] = []
+    if str(point_mode) in {"raw", "both"}:
+        sequences.extend(_raw_point_token_sequences(row))
+    if str(point_mode) in {"readout", "both"}:
+        if tokenizer is None:
+            raise ValueError("Readout capture requires a tokenizer.")
+        sequences.extend(
+            _readout_point_token_sequences(
+                row,
+                tokenizer=tokenizer,
+                max_score_length=int(max_score_length),
+            )
+        )
+    return sequences
+
+
+def point_labels(
+    row: dict[str, Any],
+    *,
+    point_mode: str = "raw",
+) -> tuple[list[str], list[str]]:
+    criteria: list[str] = []
+    targets: list[str] = []
+    for _name, stage, _budget in point_specs(point_mode):
+        criteria.append(str(row.get(f"{stage}_criterion_id") or ""))
+        targets.append(str(row.get(f"{stage}_target_semantic") or ""))
+    return criteria, targets
+
+
+def point_forced_choices(
+    row: dict[str, Any],
+    *,
+    point_mode: str = "raw",
+) -> list[str]:
+    checkpoint_maps = {
+        stage: {
+            int(checkpoint.get("budget_tokens") or 0): str(
+                checkpoint.get("forced_choice_semantic") or ""
+            )
+            for checkpoint in row.get(f"{stage}_checkpoints") or []
+        }
+        for stage in ("phase1", "phase2")
+    }
+    return [
+        checkpoint_maps[stage].get(int(budget), "")
+        for _name, stage, budget in point_specs(point_mode)
+    ]
+
+
+def point_step_indices(
+    row: dict[str, Any],
+    *,
+    point_mode: str,
+) -> np.ndarray:
+    phase1_n = int(row.get("phase1_generated_tokens") or 0)
+    phase2_n = int(row.get("phase2_generated_tokens") or 0)
+    values: list[int] = []
+    for _name, stage, budget in point_specs(point_mode):
+        if stage == "phase1":
+            values.append(min(int(budget), phase1_n))
+        else:
+            values.append(phase1_n + min(int(budget), phase2_n))
+    return np.asarray(values, dtype=np.int32)
 
 
 def _capture(
@@ -194,7 +315,8 @@ def main() -> None:
         else 0
     )
 
-    model, _tokenizer = _load_lm(args)
+    model, tokenizer = _load_lm(args)
+    specs = point_specs(str(args.point_mode))
     hidden_layers = _selected_layers(
         model,
         raw=str(args.selected_layers),
@@ -203,7 +325,7 @@ def main() -> None:
     )
     writer = TraceShardWriter(
         out_dir,
-        n_points=len(POINT_SPECS),
+        n_points=len(specs),
         hidden_layers=hidden_layers,
         shard_size=int(args.shard_size),
         compress=bool(args.compress_shards),
@@ -215,7 +337,12 @@ def main() -> None:
             trace_id = str(row["trace_id"])
             if trace_id in completed:
                 continue
-            sequences = point_token_sequences(row)
+            sequences = point_token_sequences(
+                row,
+                tokenizer=tokenizer,
+                point_mode=str(args.point_mode),
+                max_score_length=int(args.max_score_length),
+            )
             states = np.stack(
                 [
                     _capture(
@@ -227,34 +354,29 @@ def main() -> None:
                 ],
                 axis=0,
             )
-            phase1_n = int(row.get("phase1_generated_tokens") or 0)
-            step_indices = np.asarray(
-                [
-                    0,
-                    min(64, phase1_n),
-                    min(128, phase1_n),
-                    phase1_n,
-                    phase1_n
-                    + min(32, int(row.get("phase2_generated_tokens") or 0)),
-                    phase1_n
-                    + min(128, int(row.get("phase2_generated_tokens") or 0)),
-                    phase1_n
-                    + min(384, int(row.get("phase2_generated_tokens") or 0)),
-                ],
-                dtype=np.int32,
+            step_indices = point_step_indices(
+                row,
+                point_mode=str(args.point_mode),
             )
             positions = np.linspace(
-                0.0, 1.0, num=len(POINT_SPECS), dtype=np.float32
+                0.0, 1.0, num=len(specs), dtype=np.float32
             )
             shard, shard_row = writer.add(
                 states=states,
                 step_indices=step_indices,
                 positions=positions,
                 label_margins=np.full(
-                    (len(POINT_SPECS),), np.nan, dtype=np.float32
+                    (len(specs),), np.nan, dtype=np.float32
                 ),
             )
-            criteria, targets = point_labels(row)
+            criteria, targets = point_labels(
+                row,
+                point_mode=str(args.point_mode),
+            )
+            choices = point_forced_choices(
+                row,
+                point_mode=str(args.point_mode),
+            )
             new_rows.append(
                 {
                     **{
@@ -271,9 +393,10 @@ def main() -> None:
                     "trace_id": trace_id,
                     "run_label": str(args.run_label or row.get("run_label") or ""),
                     "model_id": str(args.model_id),
-                    "point_names": [name for name, _stage, _budget in POINT_SPECS],
+                    "point_names": [name for name, _stage, _budget in specs],
                     "point_active_criteria": criteria,
                     "point_target_semantics": targets,
+                    "point_forced_choices_semantic": choices,
                     "decoder_final_choice_semantic": _forced_final_choice(row),
                     "trajectory_shard": shard,
                     "trajectory_shard_row": int(shard_row),
@@ -313,9 +436,11 @@ def main() -> None:
             "run_label": str(args.run_label),
             "include_conditions": sorted(include_conditions),
             "hidden_layers": hidden_layers,
+            "point_mode": str(args.point_mode),
+            "max_score_length": int(args.max_score_length),
             "point_specs": [
                 {"name": name, "stage": stage, "budget_tokens": budget}
-                for name, stage, budget in POINT_SPECS
+                for name, stage, budget in specs
             ],
             "n_traces": int(len(output_rows)),
         },
