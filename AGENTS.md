@@ -221,6 +221,7 @@ python -m aisafety.scripts.run_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
 python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
+python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.analyze_judge_reasoning_fixed_decoders --help
 python -m aisafety.scripts.run_judge_reasoning_interventions --help
 python -m aisafety.scripts.summarize_judge_reasoning_suite --help

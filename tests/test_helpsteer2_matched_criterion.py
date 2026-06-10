@@ -1,9 +1,12 @@
 import json
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from aisafety.mech.judge_reasoning import (
     comparison_prompt_content,
@@ -18,6 +21,7 @@ from aisafety.scripts.build_helpsteer2_matched_criterion_suite import (
     materialize,
 )
 from aisafety.scripts.run_judge_reasoning_budget_sweep import _verdict_row
+from aisafety.scripts.read_helpsteer2_matched_criterion import readout
 
 
 def _source_row(
@@ -155,7 +159,7 @@ class HelpSteer2MatchedSuiteTests(unittest.TestCase):
 
 
 class HelpSteer2MatchedAnalysisTests(unittest.TestCase):
-    def test_three_way_verdict_and_matched_analysis(self) -> None:
+    def _analysis_outputs(self) -> tuple[dict[str, pd.DataFrame], list[dict]]:
         pair = {
             "pair_id": "pair",
             "origin_pair_id": "pair",
@@ -206,6 +210,10 @@ class HelpSteer2MatchedAnalysisTests(unittest.TestCase):
                     )
                 )
         outputs = analyze(rows, bootstrap=20, seed=1234)
+        return outputs, comparisons
+
+    def test_three_way_verdict_and_matched_analysis(self) -> None:
+        outputs, comparisons = self._analysis_outputs()
         summary = outputs["matched_summary"]
         self.assertTrue(summary["robust_criterion_accuracy"].eq(1.0).all())
         switches = outputs["criterion_switch_summary"]
@@ -230,11 +238,26 @@ class HelpSteer2MatchedAnalysisTests(unittest.TestCase):
             full_generated_tokens=1,
             max_budget_saturated=False,
             logits=np.asarray([-2.0, -2.0, 2.0]),
-            labels=labels,
+            labels=["A", "B", "C"],
             trace_id="tie",
         )
         self.assertEqual(tie_row["forced_choice"], "C")
         self.assertTrue(tie_row["forced_target_selected"])
+
+    def test_reader_prints_saved_analysis(self) -> None:
+        outputs, _comparisons = self._analysis_outputs()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, frame in outputs.items():
+                frame.to_csv(root / f"{name}.csv", index=False)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                readout(root, budget=1024)
+            text = output.getvalue()
+            self.assertIn("COMPLETE BUDGET CURVES", text)
+            self.assertIn("1024-TOKEN DETAIL", text)
+            self.assertIn("CRITERION SWITCHING", text)
+            self.assertIn("REVISION DYNAMICS", text)
 
 
 if __name__ == "__main__":
