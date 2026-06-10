@@ -181,7 +181,8 @@ or stable. Visible rationale text alone is not sufficient evidence.
 
 ### Held-out HelpSteer2 switch suite
 
-Use new HelpSteer2 pairs that do not overlap the first matched-criterion scout:
+Use new HelpSteer2 training-split pairs that do not overlap the validation-split
+first matched-criterion scout:
 
 - choice-to-choice conflicts, where two criteria prefer opposite responses;
 - tie-to-choice conflicts, where one criterion is tied and another selects a

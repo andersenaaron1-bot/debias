@@ -109,8 +109,11 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
                 ),
                 1,
             )
+        for pair in pairs:
+            pair["source_split"] = "train"
         episodes = build_episodes(pairs[:1])
         self.assertEqual(len(episodes), 10)
+        self.assertEqual({row["split"] for row in episodes}, {"train"})
         self.assertEqual(
             {row["condition_id"] for row in episodes},
             {"stable", "reminder", "switch", "placebo", "delayed"},

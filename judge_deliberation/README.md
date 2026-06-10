@@ -84,11 +84,13 @@ answers.
 
 The held-out staged criterion-switch scout reuses the same first-stage
 reasoning across stable, reminder, switch, placebo, and delayed-rule
-conditions. It excludes response pairs used by the first matched-criterion
-scout when that artifact is available:
+conditions. It uses the larger HelpSteer2 training split because the prior
+matched-criterion scout used validation and validation contains too few
+choice-to-choice criterion conflicts. It also excludes any prior response
+pairs by content signature when that artifact is available:
 
 ```bash
-cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_scout_v1 GPU_0=0 GPU_1=1 MAX_PAIRS_PER_TRANSITION=8 BRANCHES_PER_EPISODE=3 bash cluster/local/run_judge_criterion_switch_qwen3_8b_behavior.sh
+cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_scout_v1 SOURCE_SPLIT=train GPU_0=0 GPU_1=1 MAX_PAIRS_PER_TRANSITION=8 BRANCHES_PER_EPISODE=3 bash cluster/local/run_judge_criterion_switch_qwen3_8b_behavior.sh
 ```
 
 After inspecting and freezing the behavioral artifact, capture exact-prefix

@@ -41,7 +41,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--cache-dir", type=Path, default=None)
     parser.add_argument("--dataset-id", default="nvidia/HelpSteer2")
-    parser.add_argument("--split", default="validation")
+    parser.add_argument("--split", default="train")
     parser.add_argument(
         "--exclude-pairs-jsonl",
         type=Path,
@@ -419,7 +419,7 @@ def _episode(
         "origin_pair_id": str(pair["pair_id"]),
         "source_dataset": "helpsteer2_criterion_switch",
         "subset": str(pair["transition_type"]),
-        "split": "validation",
+        "split": str(pair.get("source_split") or ""),
         "task_type": "staged_criterion_switch",
         "comparison_dimension": "criterion_use",
         "prompt": str(pair["prompt"]),
@@ -506,6 +506,7 @@ def materialize(
     rows: Iterable[dict[str, Any]],
     excluded_pair_signatures: set[str],
     out_dir: Path,
+    source_split: str,
     max_pairs_per_transition: int,
     min_pairs_per_transition: int,
     min_choice_gap: float,
@@ -521,6 +522,8 @@ def materialize(
         min_choice_gap=min_choice_gap,
         seed=seed,
     )
+    for pair in pairs:
+        pair["source_split"] = str(source_split)
     episodes = build_episodes(pairs)
     shards = shard_episodes(
         pairs,
@@ -547,6 +550,7 @@ def materialize(
     manifest = {
         "stage": "helpsteer2-criterion-switch-suite",
         "source": source_description,
+        "source_split": str(source_split),
         "out_dir": str(out_dir),
         "primary_criteria": list(PRIMARY_CRITERIA),
         "conditions": list(CONDITIONS),
@@ -630,6 +634,7 @@ def main() -> None:
         rows=rows,
         excluded_pair_signatures=excluded_pair_signatures,
         out_dir=out_dir,
+        source_split=str(args.split),
         max_pairs_per_transition=int(args.max_pairs_per_transition),
         min_pairs_per_transition=int(args.min_pairs_per_transition),
         min_choice_gap=float(args.min_choice_gap),
