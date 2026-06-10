@@ -160,6 +160,104 @@ information" unless an intervention changes the verdict. Linear
 recoverability alone is not causal evidence and visible chain-of-thought is not
 assumed faithful.
 
+## Criterion Use: Deliberation Versus Rationalization
+
+The next claim-critical experiment asks whether the model represents an active
+criterion, constructs the target implied by that criterion, and allows that
+target to control its verdict. These are separate questions.
+
+### Operational distinction
+
+Deliberation requires:
+
+1. criterion identity to update when the rule changes;
+2. criterion-conditioned target evidence to update;
+3. final-choice evidence and the emitted verdict to follow that target; and
+4. confidence to increase primarily when criterion compliance improves.
+
+The behavior is rationalization-like when criterion or target information is
+recoverable, but the final choice remains anchored and becomes more confident
+or stable. Visible rationale text alone is not sufficient evidence.
+
+### Held-out HelpSteer2 switch suite
+
+Use new HelpSteer2 pairs that do not overlap the first matched-criterion scout:
+
+- choice-to-choice conflicts, where two criteria prefer opposite responses;
+- tie-to-choice conflicts, where one criterion is tied and another selects a
+  response;
+- same-target controls, where both criteria select the same response.
+
+Correctness, helpfulness, and coherence are the primary criteria. Every pair
+is presented in both orders. Pair-level analysis splits are frozen before any
+activation modeling.
+
+### Staged behavioral protocol
+
+Each sampled branch has a 128-token first stage and a 384-token second stage.
+The first-stage analysis is reused where conditions share the same initial
+criterion.
+
+1. **Stable:** keep the initial criterion without restating it.
+2. **Reminder:** restate the initial criterion.
+3. **Switch:** replace the initial criterion with a criterion whose target is
+   known to differ or remain the same according to the pair stratum.
+4. **Placebo:** provide a length-matched neutral review instruction.
+5. **Delayed criterion:** first compare without a decision rule, then reveal
+   the criterion.
+
+Forced A/B/C readouts are collected before reasoning, during stage one, at the
+update boundary, and during stage two. Primary behavioral outcomes are target
+adoption, anchoring to the pre-update verdict, revision latency, semantic order
+invariance, natural verdict validity, and confidence change.
+
+### Point-aligned activation artifact
+
+Replay the exact sampled token sequences and capture selected residual streams
+at:
+
+- stage-one prompt end;
+- 64 and 128 stage-one tokens;
+- stage-two prompt end, immediately after the update;
+- 32, 128, and 384 stage-two tokens.
+
+Every point records its active criterion and criterion-implied semantic target.
+The trace also records the final semantic choice. This point-level labeling is
+required because criterion and target can change within one trace.
+
+### Fixed held-out decoders
+
+Fit pair-split endpoint decoders for:
+
+- active criterion identity;
+- criterion-conditioned semantic target;
+- final semantic choice;
+- presentation order as a nuisance control.
+
+Select layer and regularization only on selection pairs, then freeze the
+decoder and apply it to all time points on intervention pairs. The central
+descriptive quantities are criterion-update latency, target-update latency,
+choice-update latency, and the target-to-choice utilization gap.
+
+### Same-pair criterion patching
+
+For each pair, order, and branch, compare the reminder and switch conditions.
+At a fixed point and layer, compute the within-pair state difference:
+
+```text
+switch state - reminder state
+```
+
+Add this difference to the reminder replay and measure whether the continuation
+moves toward the switched criterion target. Required controls are the negative
+direction, a same-target placebo difference, and a shuffled-pair criterion
+difference. Test prompt-end, 128-token, and late-stage points.
+
+A criterion-state intervention supports a scoped causal-control claim only
+when it redirects held-out verdicts more than these controls. If criterion or
+target information is decodable but patching does not affect choice, the result
+supports representation without demonstrated control.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.
@@ -216,6 +314,16 @@ The minimum complete package is:
 2. within-pair criterion rescue;
 3. one approximately 30B behavioral replication;
 4. corrected fixed-decoder trajectory analysis.
+
+The criterion-use extension refines this package:
+
+1. factual-to-evaluative budget curves establish the external behavioral
+   progression;
+2. matched HelpSteer2 results isolate criterion sensitivity on fixed texts;
+3. staged criterion switches distinguish representation, target construction,
+   and verdict control;
+4. same-pair patching tests whether criterion-induced states causally redirect
+   decisions.
 
 Cross-family replication, human ratings, and causal interventions strengthen
 the paper but should not delay the minimum package.

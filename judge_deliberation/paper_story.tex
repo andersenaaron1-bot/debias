@@ -134,6 +134,44 @@ criterion evidence on underspecified judgments. That pattern remains
 associational until replay interventions with sign-reversed and random
 orthogonal controls change final verdicts.
 
+\section{Experiment 3a: Criterion Representation and Use}
+
+The matched HelpSteer2 scout suggests a more specific failure than generic
+evaluative difficulty. Qwen3-8B usually preserves a semantic preference when
+the requested criterion changes, even while extended reasoning raises
+confidence and sometimes increases order stability. We therefore distinguish
+criterion representation, criterion-conditioned target construction, and
+choice control.
+
+On a held-out HelpSteer2 sample, each response pair supplies two criteria whose
+targets either oppose one another, differ by tie versus choice, or agree. A
+staged protocol elicits 128 tokens of analysis, then either preserves, reminds,
+switches, withholds, or neutrally restates the decision rule before a further
+384 tokens. Hidden A/B/C readouts measure whether a criterion update changes
+the model's current verdict before and after additional reasoning.
+
+The activation artifact replays these exact sampled prefixes. Point-level
+labels identify the active criterion, its implied semantic target, and the
+eventual semantic choice. Pair-held-out endpoint decoders are frozen and
+applied across time. This yields three separable outcomes: the criterion fails
+to update, the criterion updates without a target update, or criterion and
+target update while choice remains anchored. Only the third pattern directly
+supports a rationalization-like dissociation.
+
+\section{Experiment 3b: Criterion-State Patching}
+
+Descriptive decoding does not establish control. For the same pair, order, and
+sampled branch, we subtract the reminder-condition residual state from the
+switch-condition state. Adding that within-pair criterion difference to a
+reminder replay tests whether criterion-induced state changes are sufficient
+to redirect the verdict. Negative, same-target placebo, shuffled-pair, and
+presentation-order controls bound nonspecific perturbation effects.
+
+The causal claim remains local to the tested layer, point, model, and replay
+protocol. A successful patch shows criterion-state influence over the verdict;
+an accurate decoder without a successful patch shows representation without
+demonstrated causal use.
+
 \section{Replication and Scope}
 
 The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the
@@ -157,6 +195,10 @@ difficulty, or prompt format.
 \item[Required]
 Budget curves, criterion rescue, one approximately 30B replication, and fixed
 held-out trajectory decoders.
+\item[Criterion-use gate]
+The active criterion and its implied target must be decoded on held-out pairs.
+A rationalization-like claim additionally requires persistent choice evidence
+despite criterion or target updating.
 \item[Causal gate]
 Only controlled activation replay can support a claim that an early decoded
 direction influences the final verdict.

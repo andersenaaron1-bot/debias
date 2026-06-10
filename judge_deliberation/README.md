@@ -38,6 +38,9 @@ python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
 python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
+python -m aisafety.scripts.build_helpsteer2_criterion_switch_suite --help
+python -m aisafety.scripts.run_judge_criterion_switch_behavior --help
+python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 ```
 
 The later activation pass uses:
@@ -45,6 +48,9 @@ The later activation pass uses:
 ```bash
 python -m aisafety.scripts.run_judge_reasoning_trajectories --help
 python -m aisafety.scripts.analyze_judge_reasoning_fixed_decoders --help
+python -m aisafety.scripts.run_judge_criterion_switch_activations --help
+python -m aisafety.scripts.analyze_judge_criterion_switch_decoders --help
+python -m aisafety.scripts.run_judge_criterion_switch_patching --help
 ```
 
 LRZ scout submission:
@@ -75,6 +81,27 @@ cd "$WORKDIR" && RUN_TAG=helpsteer2_matched_criterion_qwen3_8b_scout_v1 GPU_0=0 
 This collector estimates compliance with an explicit decision rule on fixed
 texts. It does not establish a universal ground-truth ranking for evaluative
 answers.
+
+The held-out staged criterion-switch scout reuses the same first-stage
+reasoning across stable, reminder, switch, placebo, and delayed-rule
+conditions. It excludes response pairs used by the first matched-criterion
+scout when that artifact is available:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_scout_v1 GPU_0=0 GPU_1=1 MAX_PAIRS_PER_TRANSITION=8 BRANCHES_PER_EPISODE=3 bash cluster/local/run_judge_criterion_switch_qwen3_8b_behavior.sh
+```
+
+After inspecting and freezing the behavioral artifact, capture exact-prefix
+activations and fit pair-held-out multiclass decoders:
+
+```bash
+cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_scout_v1 GPU_0=0 GPU_1=1 bash cluster/local/run_judge_criterion_switch_qwen3_8b_mech.sh
+```
+
+Set `RUN_PATCHING=1` only after the decoder selection is accepted. The
+patching stage applies within-pair switch-minus-reminder differences at the
+selected criterion layer and includes negative, shuffled-pair, and
+same-target controls.
 
 After the scout validates the design, the confirmation run is:
 
