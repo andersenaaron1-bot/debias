@@ -39,6 +39,7 @@ python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
 python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.build_helpsteer2_criterion_switch_suite --help
+python -m aisafety.scripts.build_helpsteer2_criterion_confirmation --help
 python -m aisafety.scripts.run_judge_criterion_switch_behavior --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 ```
@@ -91,6 +92,19 @@ pairs by content signature when that artifact is available:
 
 ```bash
 cd "$WORKDIR" && RUN_TAG=judge_criterion_switch_qwen3_8b_scout_v1 SOURCE_SPLIT=train GPU_0=0 GPU_1=1 MAX_PAIRS_PER_TRANSITION=8 BRANCHES_PER_EPISODE=3 bash cluster/local/run_judge_criterion_switch_qwen3_8b_behavior.sh
+```
+
+Build the locked 24-pair operationalization confirmation and its 96 blinded
+human-audit prompts without loading the model:
+
+```bash
+cd "$WORKDIR" && ARTROOT="$ARTROOT" BUILD_ONLY=1 bash cluster/local/run_judge_criterion_confirmation_qwen3_8b.sh
+```
+
+Run the frozen 408-trace confirmation on GPU 7:
+
+```bash
+cd "$WORKDIR" && ARTROOT="$ARTROOT" RUN_ONLY=1 GPU=7 bash cluster/local/run_judge_criterion_confirmation_qwen3_8b.sh
 ```
 
 After inspecting and freezing the behavioral artifact, capture exact-prefix

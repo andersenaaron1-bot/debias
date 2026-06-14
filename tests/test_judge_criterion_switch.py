@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,6 +19,13 @@ from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     build_episodes,
     build_switch_pairs,
 )
+from aisafety.scripts.build_helpsteer2_criterion_confirmation import (
+    TRANSITION_QUOTAS,
+    build_confirmation_episodes,
+    score_evidence_text,
+    select_confirmation_pairs,
+    write_audit_bundle,
+)
 from aisafety.scripts.build_judge_reasoning_source_pack import ATTRIBUTE_NAMES
 from aisafety.scripts.run_judge_criterion_switch_activations import (
     point_forced_choices,
@@ -26,7 +35,10 @@ from aisafety.scripts.run_judge_criterion_switch_activations import (
     point_token_sequences,
 )
 from aisafety.scripts.run_judge_criterion_switch_behavior import (
+    _phase1_key,
     _semantic_verdict,
+    phase1_user_content,
+    phase2_update_content,
 )
 from aisafety.scripts.run_judge_criterion_switch_patching import _paired
 
@@ -52,6 +64,70 @@ def _source_rows() -> list[dict]:
                 _row(f"same-{index}", "weak", (2, 2, 2, 2, 2)),
             ]
         )
+    return rows
+
+
+def _confirmation_candidates() -> list[dict]:
+    rows: list[dict] = []
+    criteria = ("correctness", "helpfulness", "coherence")
+    for transition_type in TRANSITION_QUOTAS:
+        for index in range(12):
+            initial = criteria[index % len(criteria)]
+            updated = criteria[(index + 1) % len(criteria)]
+            if transition_type == "choice_to_choice":
+                initial_target = "A" if index % 2 == 0 else "B"
+                updated_target = "B" if initial_target == "A" else "A"
+            elif transition_type == "tie_to_choice":
+                initial_target = "C"
+                updated_target = "A" if index % 2 == 0 else "B"
+            else:
+                initial_target = updated_target = "A" if index % 2 == 0 else "B"
+            targets = {
+                criterion: "C" for criterion in criteria
+            }
+            targets[initial] = initial_target
+            targets[updated] = updated_target
+            gaps = {
+                criterion: (
+                    0.0
+                    if targets[criterion] == "C"
+                    else 2.0
+                    if targets[criterion] == "A"
+                    else -2.0
+                )
+                for criterion in criteria
+            }
+            rows.append(
+                {
+                    "pair_id": f"{transition_type}-{index}",
+                    "pair_signature": f"signature-{transition_type}-{index}",
+                    "prompt": f"prompt-{transition_type}-{index}",
+                    "option_a_text": "response a",
+                    "option_b_text": "response b",
+                    "option_a_attributes": {
+                        "helpfulness": 4.0,
+                        "correctness": 4.0,
+                        "coherence": 4.0,
+                        "complexity": 2.0,
+                        "verbosity": 2.0,
+                    },
+                    "option_b_attributes": {
+                        "helpfulness": 2.0,
+                        "correctness": 2.0,
+                        "coherence": 2.0,
+                        "complexity": 2.0,
+                        "verbosity": 2.0,
+                    },
+                    "criterion_gaps_a_minus_b": gaps,
+                    "criterion_targets": targets,
+                    "transition_type": transition_type,
+                    "initial_criterion_id": initial,
+                    "updated_criterion_id": updated,
+                    "initial_target_semantic": initial_target,
+                    "updated_target_semantic": updated_target,
+                    "source_split": "train",
+                }
+            )
     return rows
 
 
@@ -136,6 +212,102 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
         self.assertEqual(_semantic_verdict("A", "original"), "A")
         self.assertEqual(_semantic_verdict("A", "swapped"), "B")
         self.assertEqual(_semantic_verdict("C", "swapped"), "C")
+
+    def test_confirmation_design_counts_and_audit_bundle(self) -> None:
+        pairs = select_confirmation_pairs(
+            _confirmation_candidates(),
+            quotas=TRANSITION_QUOTAS,
+            seed=1234,
+        )
+        self.assertEqual(len(pairs), 24)
+        self.assertEqual(
+            pd.Series([row["transition_type"] for row in pairs])
+            .value_counts()
+            .to_dict(),
+            TRANSITION_QUOTAS,
+        )
+        episodes, ceiling_ids = build_confirmation_episodes(
+            pairs,
+            main_branches=2,
+            ceiling_pairs_per_conflict_transition=6,
+            seed=1234,
+        )
+        self.assertEqual(len(episodes), 216)
+        self.assertEqual(
+            sum(int(row["branches_per_episode"]) for row in episodes),
+            408,
+        )
+        self.assertEqual(len(ceiling_ids), 12)
+        self.assertTrue(
+            all(
+                row["initial_target_semantic"] == "C"
+                for row in pairs
+                if row["transition_type"] == "tie_to_choice"
+            )
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            audit = write_audit_bundle(Path(raw), pairs)
+            self.assertEqual(audit["n_audit_prompts"], 96)
+            self.assertEqual(
+                len(list((Path(raw) / "human_audit" / "prompts").glob("*.txt"))),
+                96,
+            )
+
+    def test_confirmation_prompt_variants_and_cache_sharing(self) -> None:
+        pair = _confirmation_candidates()[0]
+        pairs = select_confirmation_pairs(
+            [pair, *_confirmation_candidates()[1:]],
+            quotas=TRANSITION_QUOTAS,
+            seed=1234,
+        )
+        episodes, _ = build_confirmation_episodes(
+            pairs,
+            main_branches=2,
+            ceiling_pairs_per_conflict_transition=6,
+            seed=1234,
+        )
+        late = next(
+            row for row in episodes if row["condition_id"] == "late_criterion"
+        )
+        late_evidence = next(
+            row
+            for row in episodes
+            if row["pair_id"] == late["pair_id"]
+            and row["presentation_order"] == late["presentation_order"]
+            and row["condition_id"] == "late_evidence"
+        )
+        explicit = next(
+            row
+            for row in episodes
+            if row["condition_id"] == "late_explicit_target"
+        )
+        early_evidence = next(
+            row for row in episodes if row["condition_id"] == "early_evidence"
+        )
+        self.assertEqual(
+            _phase1_key(late, branch_index=0),
+            _phase1_key(late_evidence, branch_index=0),
+        )
+        self.assertIn(
+            "annotation evidence",
+            phase1_user_content(early_evidence),
+        )
+        self.assertIn(
+            "annotation evidence",
+            phase2_update_content(late_evidence),
+        )
+        self.assertIn(
+            f"implies Option {explicit['phase2_target_option']}",
+            phase2_update_content(explicit),
+        )
+        self.assertIn(
+            "Option A",
+            score_evidence_text(
+                pair,
+                criterion_id=str(pair["updated_criterion_id"]),
+                presentation_order="original",
+            ),
+        )
 
 
 class CriterionSwitchActivationTests(unittest.TestCase):

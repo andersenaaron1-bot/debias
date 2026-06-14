@@ -186,6 +186,31 @@ protocol. A successful patch shows criterion-state influence over the verdict;
 an accurate decoder without a successful patch shows representation without
 demonstrated causal use.
 
+\section{Experiment 3c: Locked Operationalization Confirmation}
+
+The initial 72 criterion-switch pairs are treated as development data. We
+freeze the prompt construction and readout protocol before selecting 24 new
+HelpSteer2 pairs: nine choice-to-choice conflicts, nine transitions from an
+initial criterion tie to a criterion-resolved choice, and six same-target
+controls. A blinded human audit checks both active criteria in both response
+orders, for 96 criterion-specific judgments.
+
+The confirmatory manipulation crosses whether the updated criterion is
+available before or after a 128-token initial analysis with whether the model
+also receives the two criterion-specific HelpSteer scores. The scores make the
+criterion comparison directly computable but do not state the A/B/C verdict.
+A separate late explicit-target condition supplies a downstream ceiling on 12
+conflict pairs.
+
+This factorial distinguishes three explanations. A general evidence benefit
+indicates that the criterion-only prompt did not make the target sufficiently
+computable. A selective loss of that benefit after prior commitment indicates
+that answer formation gates later criterion use. Failure even when the
+criterion target is supplied directly places the bottleneck downstream of
+target construction. We reserve ``rationalization-like'' for the
+commitment-dependent pattern and require causal replay before claiming that
+the generated explanation preserves rather than produces the verdict.
+
 \section{Replication and Scope}
 
 The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the

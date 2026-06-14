@@ -288,6 +288,49 @@ when it redirects held-out verdicts more than these controls. If criterion or
 target information is decodable but patching does not affect choice, the result
 supports representation without demonstrated control.
 
+### Locked operationalization confirmation
+
+The 72 pairs from the scout and extension runs are development data. Freeze
+prompts, checkpoints, target definitions, and later patch settings before
+opening a new 24-pair HelpSteer2 confirmation set:
+
+- 9 choice-to-choice conflicts;
+- 9 tie-to-choice conflicts, always directed from an initial tie to an updated
+  A/B target;
+- 6 same-target controls.
+
+Each pair is audited under both active criteria and both presentation orders,
+yielding 96 blinded human target checks. The main behavioral experiment crosses
+criterion timing with criterion-specific score evidence:
+
+| Condition | Criterion timing | Additional evidence |
+|---|---|---|
+| early criterion | before 128-token analysis | none |
+| late criterion | after 128-token old-criterion analysis | none |
+| early evidence | before 128-token analysis | HelpSteer criterion scores |
+| late evidence | after 128-token old-criterion analysis | HelpSteer criterion scores |
+
+The evidence gives the two criterion-specific 0--4 scores without stating an
+A/B/C verdict. Twelve conflict pairs additionally receive a late explicit
+criterion target as a downstream-control ceiling. Both orders and two branches
+produce 384 main traces; the one-branch ceiling adds 24 traces.
+
+The primary confirmatory estimands are:
+
+1. operationalization rescue from score evidence;
+2. the penalty for presenting identical criterion information after an
+   initial commitment;
+3. the timing-by-evidence interaction;
+4. whether a directly supplied target overcomes the prior verdict;
+5. order-consistent target adoption, revision latency, confidence change,
+   natural validity, and budget saturation.
+
+Do not call the result rationalization merely because the criterion is
+decodable. A rationalization-like claim requires a commitment-dependent loss
+of target adoption when equivalent criterion or target information is supplied
+late, followed by controlled target or choice interventions that localize the
+blocked stage.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.

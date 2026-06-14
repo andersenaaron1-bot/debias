@@ -63,6 +63,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--top-k", type=int, default=20)
+    parser.add_argument("--skip-direct", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
@@ -104,6 +105,8 @@ def _options_content(episode: dict[str, Any]) -> str:
 
 def phase1_user_content(episode: dict[str, Any]) -> str:
     criterion = str(episode.get("phase1_criterion_text") or "").strip()
+    evidence = str(episode.get("phase1_evidence_text") or "").strip()
+    evidence_block = f"{evidence}\n\n" if evidence else ""
     if criterion:
         rule = f"Initial decision rule:\n{criterion}\n\n"
     else:
@@ -114,6 +117,7 @@ def phase1_user_content(episode: dict[str, Any]) -> str:
     return (
         "Analyze two candidate responses in preparation for a later verdict.\n\n"
         f"{rule}"
+        f"{evidence_block}"
         f"{_options_content(episode)}"
         "Analyze the evidence carefully, but do not emit FINAL: A, FINAL: B, "
         "or FINAL: C yet."
@@ -123,6 +127,10 @@ def phase1_user_content(episode: dict[str, Any]) -> str:
 def phase2_update_content(episode: dict[str, Any]) -> str:
     condition = str(episode["condition_id"])
     criterion = str(episode["phase2_criterion_text"])
+    evidence = str(episode.get("phase2_evidence_text") or "").strip()
+    explicit_target = str(
+        episode.get("phase2_explicit_target_option") or ""
+    ).strip()
     if condition == "stable":
         update = (
             "Continue from the prior analysis under the same decision rule. "
@@ -152,8 +160,35 @@ def phase2_update_content(episode: dict[str, Any]) -> str:
             f"{criterion}\n"
             "Use it to evaluate the options."
         )
+    elif condition in {"early_criterion", "early_evidence"}:
+        update = (
+            "Continue from the prior analysis under the same active decision "
+            "rule. Do not restart from scratch."
+        )
+    elif condition in {"late_criterion", "late_evidence"}:
+        update = (
+            "The active decision rule has changed. Disregard the earlier "
+            "criterion and now use:\n"
+            f"{criterion}\n"
+            "Re-evaluate the options under the new rule."
+        )
+    elif condition == "late_explicit_target":
+        if explicit_target not in {"A", "B", "C"}:
+            raise ValueError(
+                "late_explicit_target requires phase2_explicit_target_option."
+            )
+        update = (
+            "The active decision rule has changed. Disregard the earlier "
+            "criterion and now use:\n"
+            f"{criterion}\n"
+            f"Under this rule, the supplied criterion evidence implies "
+            f"Option {explicit_target}. Treat that implication as given and "
+            "form the final verdict accordingly."
+        )
     else:
         raise ValueError(f"Unknown switch condition: {condition}")
+    if evidence:
+        update += f"\n\n{evidence}"
     return (
         f"{update}\n\n"
         "Continue reasoning, then end with exactly one line: FINAL: A, "
@@ -323,10 +358,14 @@ def _direct_key(
 
 
 def _phase1_key(episode: dict[str, Any], *, branch_index: int) -> str:
-    criterion = str(episode.get("phase1_criterion_id") or "neutral")
+    prompt_variant = str(
+        episode.get("phase1_cache_group")
+        or episode.get("phase1_criterion_id")
+        or "neutral"
+    )
     return sha1_hex(
         f"{episode['pair_id']}|{episode['presentation_order']}|"
-        f"phase1|{criterion}|{branch_index}"
+        f"phase1|{prompt_variant}|{branch_index}"
     )
 
 
@@ -378,20 +417,24 @@ def main() -> None:
     n_new_direct = 0
 
     for episode in episodes:
-        direct_criteria = {
-            str(episode["initial_criterion_id"]): (
-                str(episode["phase1_criterion_text"])
-                if str(episode.get("phase1_criterion_id") or "")
-                == str(episode["initial_criterion_id"])
-                else ""
-            ),
-            str(episode["updated_criterion_id"]): (
-                str(episode["phase2_criterion_text"])
-                if str(episode["phase2_criterion_id"])
-                == str(episode["updated_criterion_id"])
-                else ""
-            ),
-        }
+        direct_criteria = (
+            {}
+            if bool(args.skip_direct)
+            else {
+                str(episode["initial_criterion_id"]): (
+                    str(episode["phase1_criterion_text"])
+                    if str(episode.get("phase1_criterion_id") or "")
+                    == str(episode["initial_criterion_id"])
+                    else ""
+                ),
+                str(episode["updated_criterion_id"]): (
+                    str(episode["phase2_criterion_text"])
+                    if str(episode["phase2_criterion_id"])
+                    == str(episode["updated_criterion_id"])
+                    else ""
+                ),
+            }
+        )
         metadata = (
             episode.get("metadata")
             if isinstance(episode.get("metadata"), dict)
@@ -489,9 +532,14 @@ def main() -> None:
             direct_cache[direct_key] = row
             n_new_direct += 1
 
-        for branch_index in range(
-            max(int(args.branches_per_episode), 1)
-        ):
+        episode_branches = max(
+            int(
+                episode.get("branches_per_episode")
+                or args.branches_per_episode
+            ),
+            1,
+        )
+        for branch_index in range(episode_branches):
             phase1_key = _phase1_key(
                 episode,
                 branch_index=branch_index,
@@ -721,7 +769,9 @@ def main() -> None:
             "phase1_tokens": int(args.phase1_tokens),
             "phase2_tokens": int(args.phase2_tokens),
             "branches_per_episode": int(args.branches_per_episode),
+            "supports_episode_branch_override": True,
             "max_pairs": int(args.max_pairs),
+            "skip_direct": bool(args.skip_direct),
             "seed": int(args.seed),
             "resume": bool(args.resume),
             "phase1_cache_jsonl": str(phase1_path),
