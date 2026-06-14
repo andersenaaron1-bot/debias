@@ -13,6 +13,10 @@ from aisafety.scripts.analyze_judge_criterion_switch_decoders import (
     _fit,
     _metrics,
 )
+from aisafety.scripts.analyze_judge_criterion_confirmation import (
+    PAIR_METRICS,
+    paired_effects,
+)
 from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     _pair_signature,
     _transition_candidates,
@@ -307,6 +311,51 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
                 criterion_id=str(pair["updated_criterion_id"]),
                 presentation_order="original",
             ),
+        )
+
+    def test_confirmation_effect_signs(self) -> None:
+        values = {
+            "early_criterion": 0.5,
+            "early_evidence": 0.8,
+            "late_criterion": 0.4,
+            "late_evidence": 0.5,
+            "late_explicit_target": 0.9,
+        }
+        rows = []
+        for pair_id in ("p1", "p2", "p3"):
+            for condition, value in values.items():
+                row = {
+                    "pair_id": pair_id,
+                    "condition_id": condition,
+                    "transition_type": "choice_to_choice",
+                    "n_traces": 4,
+                }
+                row.update({metric: value for metric in PAIR_METRICS})
+                rows.append(row)
+        effects = paired_effects(
+            pd.DataFrame(rows),
+            bootstrap=100,
+            seed=1234,
+        )
+        target = effects[
+            effects["metric"].eq("forced_target_adoption")
+            & effects["transition_type"].eq("all")
+        ].set_index("contrast")
+        self.assertAlmostEqual(
+            target.loc["early_operationalization_rescue", "mean"],
+            0.3,
+        )
+        self.assertAlmostEqual(
+            target.loc["late_operationalization_rescue", "mean"],
+            0.1,
+        )
+        self.assertAlmostEqual(
+            target.loc["timing_by_evidence_interaction", "mean"],
+            0.2,
+        )
+        self.assertAlmostEqual(
+            target.loc["explicit_target_vs_late_criterion", "mean"],
+            0.5,
         )
 
 

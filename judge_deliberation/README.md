@@ -41,6 +41,8 @@ python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.build_helpsteer2_criterion_switch_suite --help
 python -m aisafety.scripts.build_helpsteer2_criterion_confirmation --help
 python -m aisafety.scripts.run_judge_criterion_switch_behavior --help
+python -m aisafety.scripts.analyze_judge_criterion_confirmation --help
+python -m aisafety.scripts.read_judge_criterion_confirmation --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 ```
 
@@ -105,6 +107,13 @@ Run the frozen 408-trace confirmation on GPU 7:
 
 ```bash
 cd "$WORKDIR" && ARTROOT="$ARTROOT" RUN_ONLY=1 GPU=7 bash cluster/local/run_judge_criterion_confirmation_qwen3_8b.sh
+```
+
+Analyze the completed run. The analyzer automatically uses
+`audit_prompts_for_judging_completed.csv` when it is present:
+
+```bash
+cd "$WORKDIR" && python -m aisafety.scripts.analyze_judge_criterion_confirmation --workspace-root "$WORKDIR" --run-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/behavior" --suite-dir "$ARTROOT/data/derived/helpsteer2_criterion_confirmation_judge_criterion_confirmation_qwen3_8b_v1" --out-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/analysis" && python -m aisafety.scripts.read_judge_criterion_confirmation --workspace-root "$WORKDIR" --analysis-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/analysis"
 ```
 
 After inspecting and freezing the behavioral artifact, capture exact-prefix
