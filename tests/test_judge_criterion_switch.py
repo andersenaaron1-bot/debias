@@ -17,6 +17,9 @@ from aisafety.scripts.analyze_judge_criterion_confirmation import (
     PAIR_METRICS,
     paired_effects,
 )
+from aisafety.scripts.analyze_judge_criterion_confirmation_activations import (
+    difference_rows,
+)
 from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     _pair_signature,
     _transition_candidates,
@@ -45,6 +48,12 @@ from aisafety.scripts.run_judge_criterion_switch_behavior import (
     phase2_update_content,
 )
 from aisafety.scripts.run_judge_criterion_switch_patching import _paired
+from aisafety.scripts.run_judge_criterion_confirmation_patching import (
+    _select_control,
+    matched_condition_rows,
+    patch_effects,
+    summarize_patch_rows,
+)
 from aisafety.scripts.read_judge_criterion_confirmation import _read
 
 
@@ -476,6 +485,181 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         center, model = _fit(x, labels, c_value=10.0, seed=1234)
         metrics = _metrics(model, center, x, labels)
         self.assertGreaterEqual(metrics["balanced_accuracy"], 0.99)
+
+    def test_confirmation_difference_rows_align_conditions(self) -> None:
+        point_names = [
+            "phase1_readout_0",
+            "phase1_readout_64",
+            "phase1_readout_128",
+            "phase2_readout_0",
+            "phase2_readout_32",
+            "phase2_readout_128",
+            "phase2_readout_384",
+        ]
+        conditions = [
+            "early_criterion",
+            "late_criterion",
+            "late_evidence",
+            "late_explicit_target",
+        ]
+        frame = pd.DataFrame(
+            [
+                {
+                    "trace_id": condition,
+                    "pair_id": "pair-1",
+                    "condition_id": condition,
+                    "presentation_order": "original",
+                    "branch_index": 0,
+                    "transition_type": "choice_to_choice",
+                    "point_names": point_names,
+                    "phase1_criterion_id": (
+                        "helpfulness"
+                        if condition == "early_criterion"
+                        else "correctness"
+                    ),
+                    "phase2_criterion_id": "helpfulness",
+                    "phase1_target_semantic": (
+                        "B"
+                        if condition == "early_criterion"
+                        else "A"
+                    ),
+                    "phase2_target_semantic": "B",
+                    "point_forced_choices_semantic": ["A"] * 7,
+                    "decoder_final_choice_semantic": "B",
+                }
+                for condition in conditions
+            ]
+        )
+
+        class Artifact:
+            def __init__(self):
+                self.frame = frame
+
+            def layer_states(self, layer):
+                values = np.zeros((len(frame), 7, 3), dtype=np.float32)
+                for index in range(len(frame)):
+                    values[index] = float(index + layer)
+                return values
+
+        differences, states = difference_rows(
+            Artifact(),
+            target_layers={
+                "active_criterion": 20,
+                "criterion_target": 32,
+                "current_choice": 28,
+                "final_choice": 32,
+                "presentation_order": 12,
+            },
+        )
+        self.assertEqual(
+            set(differences["difference_type"]),
+            {
+                "criterion_update",
+                "evidence_operationalization",
+                "explicit_target",
+            },
+        )
+        self.assertEqual(len(differences), 6)
+        self.assertEqual(states[20].shape, (6, 3))
+        criterion = differences[
+            differences["difference_type"].eq("criterion_update")
+        ].iloc[0]
+        self.assertEqual(criterion["active_criterion"], "helpfulness")
+        self.assertEqual(criterion["criterion_target"], "B")
+
+    def test_confirmation_patch_matching_and_controls(self) -> None:
+        rows = []
+        for pair_id, transition, target in (
+            ("p1", "choice_to_choice", "A"),
+            ("p2", "choice_to_choice", "A"),
+            ("p3", "choice_to_choice", "B"),
+            ("p4", "same_target", "A"),
+        ):
+            for condition in ("late_criterion", "late_evidence"):
+                rows.append(
+                    {
+                        "trace_id": f"{pair_id}-{condition}",
+                        "pair_id": pair_id,
+                        "condition_id": condition,
+                        "presentation_order": "original",
+                        "branch_index": 0,
+                        "transition_type": transition,
+                        "phase1_target_option": "B",
+                        "phase1_target_semantic": "B",
+                        "phase2_target_option": target,
+                        "phase2_target_semantic": target,
+                    }
+                )
+        matches = matched_condition_rows(
+            rows,
+            donor_condition="late_evidence",
+            recipient_condition="late_criterion",
+            branch_index=0,
+            include_orders={"original"},
+        )
+        self.assertEqual(len(matches), 4)
+        current = next(row for row in matches if row["pair_id"] == "p1")
+        same, quality = _select_control(
+            current,
+            matches,
+            kind="shuffled_same_target",
+            seed=1234,
+            patch_type="evidence_operationalization",
+        )
+        self.assertEqual(same["pair_id"], "p2")
+        self.assertEqual(quality, "same_order_target_transition")
+        opposite, _ = _select_control(
+            current,
+            matches,
+            kind="shuffled_opposite_target",
+            seed=1234,
+            patch_type="evidence_operationalization",
+        )
+        self.assertEqual(opposite["pair_id"], "p3")
+        stable, _ = _select_control(
+            current,
+            matches,
+            kind="same_target_donor",
+            seed=1234,
+            patch_type="evidence_operationalization",
+        )
+        self.assertEqual(stable["pair_id"], "p4")
+
+    def test_confirmation_patch_effects_are_pair_grouped(self) -> None:
+        rows = []
+        for pair_id in ("p1", "p2"):
+            for order in ("original", "swapped"):
+                for setting, value, alpha in (
+                    ("baseline", 0.25, 0.0),
+                    ("matched_delta", 0.75, 1.0),
+                    ("random_orthogonal", 0.30, 1.0),
+                ):
+                    rows.append(
+                        {
+                            "patch_type": "evidence_operationalization",
+                            "pair_id": pair_id,
+                            "presentation_order": order,
+                            "branch_index": 0,
+                            "setting": setting,
+                            "alpha": alpha,
+                            "predicted_semantic": "A",
+                            "target_selected": value >= 0.5,
+                            "target_probability": value,
+                            "target_logit_margin": value - 0.5,
+                            "choice_confidence": abs(value - 0.5),
+                        }
+                    )
+        frame = pd.DataFrame(rows)
+        summary = summarize_patch_rows(frame)
+        self.assertEqual(summary["n_pairs"].max(), 2)
+        effects = patch_effects(frame, bootstrap=100, seed=1234)
+        target = effects[
+            effects["left_setting"].eq("matched_delta")
+            & effects["right_setting"].eq("baseline")
+            & effects["metric"].eq("target_probability")
+        ].iloc[0]
+        self.assertAlmostEqual(target["mean"], 0.5)
+        self.assertEqual(target["n_pairs"], 2)
 
     def test_pair_cross_fit_keeps_branches_together(self) -> None:
         rows = []

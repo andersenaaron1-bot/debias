@@ -116,6 +116,22 @@ Analyze the completed run. The analyzer automatically uses
 cd "$WORKDIR" && python -m aisafety.scripts.analyze_judge_criterion_confirmation --workspace-root "$WORKDIR" --run-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/behavior" --suite-dir "$ARTROOT/data/derived/helpsteer2_criterion_confirmation_judge_criterion_confirmation_qwen3_8b_v1" --out-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/analysis" && python -m aisafety.scripts.read_judge_criterion_confirmation --workspace-root "$WORKDIR" --analysis-dir "$ARTROOT/artifacts/mechanistic/judge_criterion_confirmation_qwen3_8b_v1/analysis"
 ```
 
+Capture all 408 confirmation traces at the exact forced-decision boundary,
+run the frozen-layer pair-held-out analysis, and patch criterion, score
+evidence, and explicit-target state differences into criterion-only
+recipients:
+
+```bash
+cd "$WORKDIR" && ARTROOT="$ARTROOT" GPU=7 bash cluster/local/run_judge_criterion_confirmation_qwen3_8b_mech.sh
+```
+
+The paper-facing layers are frozen from the development calibration:
+criterion at layer 20, target and final choice at layer 32, current choice at
+layer 28, and presentation order at layer 12. Patching uses branch zero in
+both response orders and includes sign reversal, norm-matched random
+orthogonal, same-target shuffled, opposite-target shuffled, and
+same-target-transition controls.
+
 After inspecting and freezing the behavioral artifact, capture exact-prefix
 activations and fit pair-held-out multiclass decoders:
 

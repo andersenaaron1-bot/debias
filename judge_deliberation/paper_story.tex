@@ -211,6 +211,33 @@ target construction. We reserve ``rationalization-like'' for the
 commitment-dependent pattern and require causal replay before claiming that
 the generated explanation preserves rather than produces the verdict.
 
+\paragraph{Current confirmatory pattern.}
+The locked behavioral sample does not show a meaningful early-versus-late
+commitment penalty. Criterion-only forced target adoption is approximately
+$0.59$ when the updated criterion is early and $0.53$ when it is late.
+Supplying criterion-specific score evidence raises both conditions to
+approximately $0.99$, and a late explicit target reaches $1.00$. The strongest
+current interpretation is therefore that the model can respond to an
+operationalized criterion target but does not reliably construct that target
+from criterion language alone. This supports awareness or representation
+without reliable operationalization; it does not yet support
+commitment-driven rationalization.
+
+\paragraph{Mechanistic adjudication.}
+We freeze the development-selected readout layers before opening the
+confirmatory activations. Pair-held-out probes measure the active criterion,
+criterion target, current choice, and final choice at the exact
+\texttt{FINAL:} boundary. The causal test patches three matched residual
+differences: early criterion minus late criterion after the phase-one analysis,
+late score evidence minus late criterion immediately after the phase-two
+update, and late explicit target minus late criterion at the same point.
+Positive patches are compared with sign-reversed, norm-matched random
+orthogonal, shuffled same-target, shuffled opposite-target, and
+same-target-transition controls. A selective increase in target probability
+or target logit margin would show that the missing operationalized state is
+sufficient to influence the verdict. Strong decoding without a selective
+patch effect would instead localize the failure to downstream use.
+
 \section{Replication and Scope}
 
 The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the

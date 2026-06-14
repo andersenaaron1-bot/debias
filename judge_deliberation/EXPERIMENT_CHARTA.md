@@ -331,6 +331,30 @@ of target adoption when equivalent criterion or target information is supplied
 late, followed by controlled target or choice interventions that localize the
 blocked stage.
 
+The first locked behavioral run instead shows a timing-invariant
+operationalization gap: criterion-only target adoption is approximately
+0.59 early and 0.53 late, while criterion-specific score evidence raises both
+to approximately 0.99. The explicit target ceiling is 1.00. The current claim
+is therefore awareness or criterion representation without reliable
+operationalization, not commitment-driven rationalization.
+
+The frozen mechanistic adjudication has three matched differences:
+
+1. early-criterion minus late-criterion at the phase-one 128-token readout,
+   patched at the development-selected criterion layer 20;
+2. late-evidence minus late-criterion at the phase-two zero-token readout,
+   patched at target layer 32;
+3. late-explicit-target minus late-criterion at the same phase-two readout and
+   layer.
+
+Each patch is evaluated on conflict pairs in both orders using direct A/B/C
+readout logits. Required controls are sign reversal, a magnitude-matched
+random orthogonal vector, a shuffled same-target vector, a shuffled
+opposite-target vector, and, where available, a vector from a same-target
+transition. Pair-bootstrap effects on target probability, target logit margin,
+discrete target adoption, and order consistency determine whether the
+represented criterion/evidence update is sufficient to control the verdict.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.
