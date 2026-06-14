@@ -45,6 +45,7 @@ from aisafety.scripts.run_judge_criterion_switch_behavior import (
     phase2_update_content,
 )
 from aisafety.scripts.run_judge_criterion_switch_patching import _paired
+from aisafety.scripts.read_judge_criterion_confirmation import _read
 
 
 def _row(prompt: str, response: str, values: tuple[float, ...]) -> dict:
@@ -357,6 +358,12 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
             target.loc["explicit_target_vs_late_criterion", "mean"],
             0.5,
         )
+
+    def test_confirmation_reader_accepts_empty_optional_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "audit_pair_rows.csv").write_text("", encoding="utf-8")
+            self.assertTrue(_read(root, "audit_pair_rows.csv").empty)
 
 
 class CriterionSwitchActivationTests(unittest.TestCase):

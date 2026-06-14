@@ -49,7 +49,12 @@ def _resolve(root: Path, path: Path) -> Path:
 
 def _read(root: Path, name: str) -> pd.DataFrame:
     path = root / name
-    return pd.read_csv(path) if path.is_file() else pd.DataFrame()
+    if not path.is_file() or path.stat().st_size == 0:
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
 
 
 def _print(title: str, frame: pd.DataFrame, *, digits: int) -> None:
