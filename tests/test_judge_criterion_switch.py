@@ -248,6 +248,25 @@ def _summeval_rows() -> list[dict]:
     return rows
 
 
+def _summeval_sequence_rows() -> list[dict]:
+    return [
+        {
+            "id": "cnn-test-demo",
+            "text": "A source document about a news event.",
+            "machine_summaries": [
+                "A coherent but inconsistent summary.",
+                "A less coherent but faithful summary.",
+                "A generally strong summary.",
+            ],
+            "human_summaries": ["A reference summary."],
+            "coherence": [4.5, 2.0, 4.4],
+            "consistency": [2.0, 4.5, 4.3],
+            "fluency": [4.0, 4.0, 4.2],
+            "relevance": [3.0, 3.0, 4.1],
+        }
+    ]
+
+
 class CriterionSwitchSuiteTests(unittest.TestCase):
     def test_transition_types(self) -> None:
         choice = _transition_candidates(
@@ -376,6 +395,19 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
             max_source_chars=200,
         )
         self.assertTrue(normalized)
+        sequence_normalized = normalize_summeval_rows(
+            _summeval_sequence_rows(),
+            max_source_chars=200,
+        )
+        self.assertEqual(len(sequence_normalized), 3)
+        self.assertEqual(
+            sequence_normalized[0]["scores"]["coherence"],
+            4.5,
+        )
+        self.assertEqual(
+            sequence_normalized[1]["scores"]["consistency"],
+            4.5,
+        )
         pairs = build_summeval_pairs(
             _summeval_rows(),
             max_pairs_per_transition=4,

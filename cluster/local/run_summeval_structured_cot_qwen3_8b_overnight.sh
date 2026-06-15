@@ -88,7 +88,15 @@ run_logged() {
     printf '  '; printf '%q ' "$@"; printf '\n'
     return 0
   fi
-  "$@" >"$LOG_DIR/${name}.out" 2>"$LOG_DIR/${name}.err"
+  if ! "$@" >"$LOG_DIR/${name}.out" 2>"$LOG_DIR/${name}.err"; then
+    local status=$?
+    echo "FAILED $name status=$status" >&2
+    echo "--- $LOG_DIR/${name}.out tail ---" >&2
+    tail -n 80 "$LOG_DIR/${name}.out" >&2 || true
+    echo "--- $LOG_DIR/${name}.err tail ---" >&2
+    tail -n 80 "$LOG_DIR/${name}.err" >&2 || true
+    exit "$status"
+  fi
 }
 
 if [[ "$FORCE_SUITE_REBUILD" == "1" \

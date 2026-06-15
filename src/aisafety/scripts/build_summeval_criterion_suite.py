@@ -68,6 +68,7 @@ SUMMARY_KEYS = (
     "system_output",
 )
 SOURCE_KEYS = (
+    "text",
     "source",
     "document",
     "article",
@@ -241,6 +242,39 @@ def _summary_items(row: dict[str, Any]) -> list[tuple[str, str, dict[str, float]
         ]
 
     items: list[tuple[str, str, dict[str, float]]] = []
+    for summary_key in (
+        "machine_summaries",
+        "summaries",
+        "system_outputs",
+        "outputs",
+    ):
+        summaries = row.get(summary_key)
+        if not isinstance(summaries, list):
+            continue
+        score_lists: dict[str, list[Any]] = {}
+        for criterion in CRITERIA:
+            values = row.get(criterion)
+            if isinstance(values, list):
+                score_lists[criterion] = values
+        if len(score_lists) != len(CRITERIA):
+            continue
+        for index, summary in enumerate(summaries):
+            scores: dict[str, float] = {}
+            for criterion, values in score_lists.items():
+                if index >= len(values):
+                    scores = {}
+                    break
+                try:
+                    scores[criterion] = float(values[index])
+                except (TypeError, ValueError):
+                    scores = {}
+                    break
+            text = flat_text(str(summary))
+            if text and len(scores) == len(CRITERIA):
+                items.append((f"{summary_key}:{index}", text, scores))
+        if items:
+            return items
+
     for key in ("summaries", "machine_summaries", "system_outputs", "outputs"):
         value = row.get(key)
         if not isinstance(value, list):
