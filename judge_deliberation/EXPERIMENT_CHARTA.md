@@ -355,6 +355,44 @@ transition. Pair-bootstrap effects on target probability, target logit margin,
 discrete target adoption, and order consistency determine whether the
 represented criterion/evidence update is sufficient to control the verdict.
 
+### Structured-CoT operationalization test
+
+Reuse the locked 24 pairs and audited criterion targets so that only the
+reasoning procedure changes. Run four main conditions with two branches and
+both response orders:
+
+1. `free_cot`: the original criterion-only analysis prompt;
+2. `generic_scaffold`: a four-step, length-matched summary and comparison
+   procedure that does not translate the criterion into tests;
+3. `criterion_scaffold`: translate the criterion into observable tests, apply
+   the same tests to both options, and compare the criterion-specific
+   assessments;
+4. `score_evidence`: free CoT plus the criterion-specific HelpSteer scores.
+
+Retain the existing 12-pair explicit-target ceiling with one branch and add one
+deduplicated direct/no-thinking evaluation for each pair and order. This gives
+408 CoT traces and 48 direct evaluations, matching the computational scale of
+the locked confirmation. Replay branch zero for the four main conditions at
+the exact forced-decision boundary, giving 192 activation traces. Apply the
+already frozen criterion, target, current-choice, and final-choice layers; do
+not reselect layers on this follow-up.
+
+The pre-registered primary contrasts are:
+
+- criterion scaffold minus free CoT;
+- criterion scaffold minus generic scaffold;
+- generic scaffold minus free CoT;
+- score evidence minus free CoT;
+- criterion scaffold minus score evidence;
+- explicit target minus criterion scaffold.
+
+The criterion scaffold supports a learned-computation-template account only
+if it improves target adoption over both free CoT and the generic scaffold.
+An increase in order consistency without order-consistent target adoption is
+not a rescue. A score-evidence rescue without a criterion-scaffold rescue
+instead supports a semantic-to-decision compilation bottleneck that natural
+language decomposition alone does not overcome.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.

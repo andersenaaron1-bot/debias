@@ -132,6 +132,28 @@ both response orders and includes sign reversal, norm-matched random
 orthogonal, same-target shuffled, opposite-target shuffled, and
 same-target-transition controls.
 
+Run the matched structured-CoT follow-up on the same locked 24 pairs. This
+compares free CoT, a generic length-matched scaffold, a criterion-operational
+scaffold, score evidence, an explicit-target ceiling, and a cached direct
+answer baseline:
+
+```bash
+cd "$WORKDIR" && ARTROOT="$ARTROOT" GPU=7 bash cluster/local/run_judge_structured_cot_qwen3_8b_overnight.sh
+```
+
+The default run contains 408 CoT traces, 48 direct evaluations, and a
+branch-zero activation replay of the 192 main-condition traces. The primary
+effect is `criterion_scaffold - free_cot`; specificity requires the same
+improvement against `generic_scaffold`. Success requires higher
+order-consistent target adoption without a corresponding increase in invalid
+or budget-saturated outputs. Fixed development-selected layers test whether
+the scaffold also strengthens criterion-target and choice readouts. Set
+`RUN_ACTIVATIONS=0` for behavior only. The complete readout is written to:
+
+```bash
+$ARTROOT/artifacts/mechanistic/judge_structured_cot_qwen3_8b_v1/readout.txt
+```
+
 After inspecting and freezing the behavioral artifact, capture exact-prefix
 activations and fit pair-held-out multiclass decoders:
 

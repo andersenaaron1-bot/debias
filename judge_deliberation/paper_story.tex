@@ -238,6 +238,41 @@ or target logit margin would show that the missing operationalized state is
 sufficient to influence the verdict. Strong decoding without a selective
 patch effect would instead localize the failure to downstream use.
 
+\section{Experiment 3d: Does Structured Reasoning Compile the Rubric?}
+
+The operationalization gap may arise because reasoning post-training teaches
+models to continue familiar computational trajectories, while a natural
+language criterion alone does not specify a sufficiently familiar procedure.
+We test this account without changing the responses, criteria, targets, or
+human audit. On the same locked 24 pairs, free CoT is compared with two
+four-step scaffolds. The criterion-operational scaffold translates the active
+rule into observable tests, applies the same tests to each option, and then
+compares the criterion-specific assessments. The generic scaffold matches the
+step count and approximate instruction length but instead requests balanced
+summaries and surface comparison without compiling the criterion.
+
+Score evidence remains an operationalization ceiling, and the existing
+explicit-target condition remains a downstream ceiling. A deduplicated
+direct-answer condition measures whether generated reasoning helps beyond the
+model's immediate criterion-conditioned readout. The primary outcome is
+order-consistent target adoption across both response orders, followed by
+forced target adoption, natural validity, confidence, and budget saturation.
+Checkpoint readouts determine whether any scaffold advantage emerges during
+the initial 128-token analysis or only during the subsequent 384-token
+continuation. A branch-zero activation replay applies the previously frozen
+criterion, target, current-choice, and final-choice decoders to all four main
+conditions. This tests whether behavioral rescue is accompanied by a stronger
+criterion-conditioned target representation rather than only a different
+surface rationale.
+
+A criterion-scaffold advantage over both free CoT and generic structure would
+support the hypothesis that an imposed computation sequence helps compile
+rubric language into a usable target. Improvement over free CoT but not generic
+structure would instead implicate generic attention or decomposition. If
+scores remain effective while both scaffolds fail, the stronger conclusion is
+that criterion-specific numerical evidence supplies a target-like state that
+natural language reasoning procedures do not reliably construct.
+
 \section{Replication and Scope}
 
 The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the

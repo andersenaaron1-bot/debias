@@ -20,6 +20,10 @@ from aisafety.scripts.analyze_judge_criterion_confirmation import (
 from aisafety.scripts.analyze_judge_criterion_confirmation_activations import (
     difference_rows,
 )
+from aisafety.scripts.analyze_judge_structured_cot import (
+    _checkpoint_pair_metrics,
+    _paired_effects,
+)
 from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     _pair_signature,
     _transition_candidates,
@@ -33,8 +37,14 @@ from aisafety.scripts.build_helpsteer2_criterion_confirmation import (
     select_confirmation_pairs,
     write_audit_bundle,
 )
+from aisafety.scripts.build_helpsteer2_structured_cot_suite import (
+    CRITERION_SCAFFOLD,
+    GENERIC_SCAFFOLD,
+    build_structured_cot_episodes,
+)
 from aisafety.scripts.build_judge_reasoning_source_pack import ATTRIBUTE_NAMES
 from aisafety.scripts.run_judge_criterion_switch_activations import (
+    filter_traces,
     point_forced_choices,
     point_labels,
     point_specs,
@@ -374,8 +384,115 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
             (root / "audit_pair_rows.csv").write_text("", encoding="utf-8")
             self.assertTrue(_read(root, "audit_pair_rows.csv").empty)
 
+    def test_structured_cot_design_counts_and_prompt_controls(self) -> None:
+        pairs = select_confirmation_pairs(
+            _confirmation_candidates(),
+            quotas=TRANSITION_QUOTAS,
+            seed=1234,
+        )
+        conflict_ids = {
+            str(row["pair_id"])
+            for row in pairs
+            if row["transition_type"] != "same_target"
+        }
+        ceiling_ids = set(sorted(conflict_ids)[:12])
+        episodes = build_structured_cot_episodes(
+            pairs,
+            ceiling_pair_ids=ceiling_ids,
+            main_branches=2,
+            ceiling_branches=1,
+            include_explicit_target=True,
+        )
+        self.assertEqual(len(episodes), 216)
+        self.assertEqual(
+            sum(int(row["branches_per_episode"]) for row in episodes),
+            408,
+        )
+        direct_keys = {
+            (
+                row["pair_id"],
+                row["presentation_order"],
+                row["direct_criterion_ids"][0],
+            )
+            for row in episodes
+        }
+        self.assertEqual(len(direct_keys), 48)
+        criterion = next(
+            row
+            for row in episodes
+            if row["condition_id"] == "criterion_scaffold"
+        )
+        generic = next(
+            row
+            for row in episodes
+            if row["pair_id"] == criterion["pair_id"]
+            and row["presentation_order"]
+            == criterion["presentation_order"]
+            and row["condition_id"] == "generic_scaffold"
+        )
+        self.assertEqual(
+            criterion["phase1_reasoning_instructions"],
+            CRITERION_SCAFFOLD,
+        )
+        self.assertEqual(
+            generic["phase1_reasoning_instructions"],
+            GENERIC_SCAFFOLD,
+        )
+        self.assertNotIn(
+            "implies Option",
+            criterion["phase1_reasoning_instructions"],
+        )
+        self.assertLess(
+            abs(
+                len(CRITERION_SCAFFOLD.split())
+                - len(GENERIC_SCAFFOLD.split())
+            ),
+            30,
+        )
+
+    def test_structured_cot_prompt_extension_points(self) -> None:
+        episode = {
+            "condition_id": "criterion_scaffold",
+            "prompt": "question",
+            "option_a_text": "left",
+            "option_b_text": "right",
+            "phase1_criterion_text": "Use correctness.",
+            "phase2_criterion_text": "Use correctness.",
+            "phase1_evidence_text": "",
+            "phase2_evidence_text": "",
+            "phase1_reasoning_instructions": "Apply the rule step by step.",
+            "phase2_update_override": "Use the prior structured analysis.",
+        }
+        phase1 = phase1_user_content(episode)
+        self.assertIn("Reasoning procedure", phase1)
+        self.assertIn("Apply the rule step by step.", phase1)
+        self.assertIn(
+            "Use the prior structured analysis.",
+            phase2_update_content(episode),
+        )
+
 
 class CriterionSwitchActivationTests(unittest.TestCase):
+    def test_activation_filter_selects_conditions_and_branches(self) -> None:
+        rows = [
+            {
+                "trace_id": f"{condition}-{branch}",
+                "condition_id": condition,
+                "branch_index": branch,
+            }
+            for condition in ("free_cot", "criterion_scaffold")
+            for branch in (0, 1)
+        ]
+        selected = filter_traces(
+            rows,
+            include_conditions={"criterion_scaffold"},
+            include_branches={0},
+        )
+        self.assertEqual(
+            [row["trace_id"] for row in selected],
+            ["criterion_scaffold-0"],
+        )
+
     def test_point_prefixes_and_labels(self) -> None:
         row = {
             "phase1_prompt_token_ids": [1, 2],
@@ -660,6 +777,52 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         ].iloc[0]
         self.assertAlmostEqual(target["mean"], 0.5)
         self.assertEqual(target["n_pairs"], 2)
+
+    def test_structured_cot_checkpoint_effects_are_pair_matched(self) -> None:
+        rows = []
+        for pair_id in ("p1", "p2", "p3", "p4"):
+            target = "A"
+            for condition in ("free_cot", "criterion_scaffold"):
+                for branch_index in (0, 1):
+                    for order in ("original", "swapped"):
+                        correct = (
+                            condition == "criterion_scaffold"
+                            or pair_id in {"p1", "p2"}
+                        )
+                        choice = target if correct else "B"
+                        rows.append(
+                            {
+                                "trace_id": (
+                                    f"{pair_id}-{condition}-"
+                                    f"{branch_index}-{order}"
+                                ),
+                                "pair_id": pair_id,
+                                "condition_id": condition,
+                                "transition_type": "choice_to_choice",
+                                "branch_index": branch_index,
+                                "presentation_order": order,
+                                "stage": "phase2",
+                                "budget_tokens": 384,
+                                "phase1_target_semantic": target,
+                                "phase2_target_semantic": target,
+                                "forced_choice_semantic": choice,
+                                "forced_choice_confidence": 0.8,
+                            }
+                        )
+        pair_metrics = _checkpoint_pair_metrics(pd.DataFrame(rows))
+        effects = _paired_effects(
+            pair_metrics,
+            metrics=("forced_target_adoption",),
+            bootstrap=100,
+            seed=1234,
+            extra_index=["stage", "budget_tokens"],
+        )
+        target = effects[
+            effects["contrast"].eq("criterion_scaffold_rescue")
+            & effects["transition_type"].eq("all")
+        ].iloc[0]
+        self.assertAlmostEqual(target["mean"], 0.5)
+        self.assertEqual(target["n_pairs"], 4)
 
     def test_pair_cross_fit_keeps_branches_together(self) -> None:
         rows = []

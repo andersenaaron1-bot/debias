@@ -230,6 +230,9 @@ python -m aisafety.scripts.read_judge_criterion_confirmation --help
 python -m aisafety.scripts.analyze_judge_criterion_confirmation_activations --help
 python -m aisafety.scripts.run_judge_criterion_confirmation_patching --help
 python -m aisafety.scripts.read_judge_criterion_confirmation_mechanistic --help
+python -m aisafety.scripts.build_helpsteer2_structured_cot_suite --help
+python -m aisafety.scripts.analyze_judge_structured_cot --help
+python -m aisafety.scripts.read_judge_structured_cot --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 python -m aisafety.scripts.run_judge_criterion_switch_activations --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_decoders --help

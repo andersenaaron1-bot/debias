@@ -55,6 +55,11 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="Optional comma-separated condition allowlist.",
     )
+    parser.add_argument(
+        "--include-branches",
+        default="",
+        help="Optional comma-separated branch-index allowlist.",
+    )
     parser.add_argument("--selected-layers", default="")
     parser.add_argument("--layer-stride", type=int, default=4)
     parser.add_argument("--tail-layers", type=int, default=2)
@@ -88,6 +93,26 @@ def _resolve(root: Path, path: Path) -> Path:
 
 def _csv(raw: str) -> list[str]:
     return [value.strip() for value in str(raw).split(",") if value.strip()]
+
+
+def filter_traces(
+    traces: list[dict[str, Any]],
+    *,
+    include_conditions: set[str],
+    include_branches: set[int],
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in traces
+        if (
+            not include_conditions
+            or str(row.get("condition_id") or "") in include_conditions
+        )
+        and (
+            not include_branches
+            or int(row.get("branch_index") or 0) in include_branches
+        )
+    ]
 
 
 def _selected_layers(
@@ -291,12 +316,14 @@ def main() -> None:
     out_dir = _resolve(workspace_root, args.out_dir)
     traces = read_jsonl(behavior_dir / "switch_traces.jsonl")
     include_conditions = set(_csv(args.include_conditions))
-    if include_conditions:
-        traces = [
-            row
-            for row in traces
-            if str(row.get("condition_id") or "") in include_conditions
-        ]
+    include_branches = {
+        int(value) for value in _csv(args.include_branches)
+    }
+    traces = filter_traces(
+        traces,
+        include_conditions=include_conditions,
+        include_branches=include_branches,
+    )
     if not traces:
         raise ValueError(f"No switch traces found in {behavior_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -435,6 +462,7 @@ def main() -> None:
             "model_id": str(args.model_id),
             "run_label": str(args.run_label),
             "include_conditions": sorted(include_conditions),
+            "include_branches": sorted(include_branches),
             "hidden_layers": hidden_layers,
             "point_mode": str(args.point_mode),
             "max_score_length": int(args.max_score_length),

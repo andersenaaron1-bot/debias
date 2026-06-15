@@ -106,7 +106,15 @@ def _options_content(episode: dict[str, Any]) -> str:
 def phase1_user_content(episode: dict[str, Any]) -> str:
     criterion = str(episode.get("phase1_criterion_text") or "").strip()
     evidence = str(episode.get("phase1_evidence_text") or "").strip()
+    reasoning_instructions = str(
+        episode.get("phase1_reasoning_instructions") or ""
+    ).strip()
     evidence_block = f"{evidence}\n\n" if evidence else ""
+    reasoning_block = (
+        f"Reasoning procedure:\n{reasoning_instructions}\n\n"
+        if reasoning_instructions
+        else ""
+    )
     if criterion:
         rule = f"Initial decision rule:\n{criterion}\n\n"
     else:
@@ -119,6 +127,7 @@ def phase1_user_content(episode: dict[str, Any]) -> str:
         f"{rule}"
         f"{evidence_block}"
         f"{_options_content(episode)}"
+        f"{reasoning_block}"
         "Analyze the evidence carefully, but do not emit FINAL: A, FINAL: B, "
         "or FINAL: C yet."
     )
@@ -128,10 +137,13 @@ def phase2_update_content(episode: dict[str, Any]) -> str:
     condition = str(episode["condition_id"])
     criterion = str(episode["phase2_criterion_text"])
     evidence = str(episode.get("phase2_evidence_text") or "").strip()
+    override = str(episode.get("phase2_update_override") or "").strip()
     explicit_target = str(
         episode.get("phase2_explicit_target_option") or ""
     ).strip()
-    if condition == "stable":
+    if override:
+        update = override
+    elif condition == "stable":
         update = (
             "Continue from the prior analysis under the same decision rule. "
             "Do not restart from scratch."
@@ -417,10 +429,24 @@ def main() -> None:
     n_new_direct = 0
 
     for episode in episodes:
-        direct_criteria = (
-            {}
-            if bool(args.skip_direct)
-            else {
+        requested_direct = episode.get("direct_criterion_ids")
+        if bool(args.skip_direct):
+            direct_criteria = {}
+        elif isinstance(requested_direct, list) and requested_direct:
+            direct_criteria = {
+                str(criterion_id): (
+                    str(episode["phase1_criterion_text"])
+                    if str(episode.get("phase1_criterion_id") or "")
+                    == str(criterion_id)
+                    else str(episode["phase2_criterion_text"])
+                    if str(episode.get("phase2_criterion_id") or "")
+                    == str(criterion_id)
+                    else ""
+                )
+                for criterion_id in requested_direct
+            }
+        else:
+            direct_criteria = {
                 str(episode["initial_criterion_id"]): (
                     str(episode["phase1_criterion_text"])
                     if str(episode.get("phase1_criterion_id") or "")
@@ -434,7 +460,6 @@ def main() -> None:
                     else ""
                 ),
             }
-        )
         metadata = (
             episode.get("metadata")
             if isinstance(episode.get("metadata"), dict)
