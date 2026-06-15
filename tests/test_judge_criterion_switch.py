@@ -54,6 +54,11 @@ from aisafety.scripts.build_helpsteer2_structured_cot_suite import (
 from aisafety.scripts.build_helpsteer2_enforced_structure_suite import (
     build_episodes as build_enforced_episodes,
 )
+from aisafety.scripts.build_summeval_criterion_suite import (
+    build_episodes as build_summeval_episodes,
+    build_summeval_pairs,
+    normalize_summeval_rows,
+)
 from aisafety.scripts.build_judge_reasoning_source_pack import ATTRIBUTE_NAMES
 from aisafety.scripts.run_judge_criterion_switch_activations import (
     filter_traces,
@@ -170,6 +175,76 @@ def _confirmation_candidates() -> list[dict]:
                     "source_split": "train",
                 }
             )
+    return rows
+
+
+def _summeval_rows() -> list[dict]:
+    rows: list[dict] = []
+    for doc_index in range(10):
+        rows.extend(
+            [
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A coherent but inconsistent summary.",
+                    "model_id": "coherent",
+                    "coherence": 4.5,
+                    "consistency": 2.0,
+                    "fluency": 4.0,
+                    "relevance": 3.0,
+                },
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A less coherent but faithful summary.",
+                    "model_id": "faithful",
+                    "coherence": 2.0,
+                    "consistency": 4.5,
+                    "fluency": 4.0,
+                    "relevance": 3.0,
+                },
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A generally strong summary.",
+                    "model_id": "strong",
+                    "coherence": 4.4,
+                    "consistency": 4.3,
+                    "fluency": 4.2,
+                    "relevance": 4.1,
+                },
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A generally weak summary.",
+                    "model_id": "weak",
+                    "coherence": 2.2,
+                    "consistency": 2.1,
+                    "fluency": 2.0,
+                    "relevance": 1.9,
+                },
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A relevant but choppy summary.",
+                    "model_id": "relevant",
+                    "coherence": 3.0,
+                    "consistency": 3.0,
+                    "fluency": 2.0,
+                    "relevance": 4.5,
+                },
+                {
+                    "doc_id": f"doc-{doc_index}",
+                    "source": f"Source article {doc_index}",
+                    "summary": "A similarly coherent summary.",
+                    "model_id": "tie-coherence",
+                    "coherence": 3.05,
+                    "consistency": 3.0,
+                    "fluency": 4.4,
+                    "relevance": 2.0,
+                },
+            ]
+        )
     return rows
 
 
@@ -294,6 +369,59 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
                 len(list((Path(raw) / "human_audit" / "prompts").glob("*.txt"))),
                 96,
             )
+
+    def test_summeval_pair_selection_and_episode_schema(self) -> None:
+        normalized = normalize_summeval_rows(
+            _summeval_rows(),
+            max_source_chars=200,
+        )
+        self.assertTrue(normalized)
+        pairs = build_summeval_pairs(
+            _summeval_rows(),
+            max_pairs_per_transition=4,
+            min_pairs_per_transition=3,
+            min_choice_gap=0.4,
+            tie_threshold=0.15,
+            max_source_chars=200,
+            seed=1234,
+        )
+        self.assertEqual(
+            {row["transition_type"] for row in pairs},
+            {"criterion_flip", "tie_to_choice", "same_target"},
+        )
+        self.assertGreaterEqual(
+            [row["transition_type"] for row in pairs].count(
+                "criterion_flip"
+            ),
+            3,
+        )
+        episodes = build_summeval_episodes(
+            pairs[:2],
+            main_branches=2,
+            ceiling_branches=1,
+            include_explicit_target=True,
+        )
+        self.assertEqual(len(episodes), 20)
+        self.assertEqual(
+            {row["condition_id"] for row in episodes},
+            {
+                "free_cot",
+                "generic_scaffold",
+                "criterion_scaffold",
+                "score_evidence",
+                "explicit_target",
+            },
+        )
+        for episode in episodes:
+            self.assertEqual(
+                episode["phase1_criterion_id"],
+                episode["updated_criterion_id"],
+            )
+            self.assertEqual(
+                episode["direct_criterion_ids"],
+                [episode["updated_criterion_id"]],
+            )
+            self.assertIn(episode["phase2_target_semantic"], {"A", "B", "C"})
 
     def test_confirmation_prompt_variants_and_cache_sharing(self) -> None:
         pair = _confirmation_candidates()[0]
