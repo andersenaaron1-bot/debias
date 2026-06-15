@@ -88,7 +88,9 @@ run_logged() {
     printf '  '; printf '%q ' "$@"; printf '\n'
     return 0
   fi
-  if ! "$@" >"$LOG_DIR/${name}.out" 2>"$LOG_DIR/${name}.err"; then
+  if "$@" >"$LOG_DIR/${name}.out" 2>"$LOG_DIR/${name}.err"; then
+    return 0
+  else
     local status=$?
     echo "FAILED $name status=$status" >&2
     echo "--- $LOG_DIR/${name}.out tail ---" >&2
