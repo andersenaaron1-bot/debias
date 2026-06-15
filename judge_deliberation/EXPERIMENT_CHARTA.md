@@ -393,6 +393,19 @@ not a rescue. A score-evidence rescue without a criterion-scaffold rescue
 instead supports a semantic-to-decision compilation bottleneck that natural
 language decomposition alone does not overcome.
 
+Before escalating to a constrained externalized procedure, score phase-one
+rationales for two distinct manipulation checks. Format adherence requires at
+least three of the four requested step markers. Content adherence requires an
+explicit criterion reference, operational-test language, application to and
+textual grounding in both options, criterion-specific comparison, and no
+premature final verdict. Report the continuous procedure score and the strict
+intersection of format and content adherence. Test whether the scaffold raises
+these measures over free CoT and the generic scaffold, then estimate
+pair-clustered within-pair associations between adherence and target adoption.
+These associations diagnose whether successful execution co-occurs with
+criterion use; they are not causal mediation estimates. Manually validate a
+stratified sample before using the automatic adherence labels in the paper.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.

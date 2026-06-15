@@ -24,6 +24,11 @@ from aisafety.scripts.analyze_judge_structured_cot import (
     _checkpoint_pair_metrics,
     _paired_effects,
 )
+from aisafety.scripts.analyze_judge_structured_cot_adherence import (
+    _outcome_associations,
+    branch_pair_rows,
+    score_adherence,
+)
 from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     _pair_signature,
     _transition_candidates,
@@ -471,6 +476,49 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
             phase2_update_content(episode),
         )
 
+    def test_structured_cot_adherence_scoring(self) -> None:
+        compliant = score_adherence(
+            {
+                "phase1_criterion_id": "correctness",
+                "option_a_text": (
+                    "Paris is the capital of France and has a large "
+                    "population."
+                ),
+                "option_b_text": (
+                    "Lyon is the capital of France and has a smaller "
+                    "population."
+                ),
+                "phase1_response_text": (
+                    "1. The correctness test is whether the claimed capital "
+                    "is factually correct.\n"
+                    "2. Option A says Paris is the capital of France, which "
+                    "passes that factual test.\n"
+                    "3. Option B says Lyon is the capital of France, which "
+                    "fails the same factual test.\n"
+                    "4. Comparing the criterion-specific evidence, Option A "
+                    "is better."
+                ),
+            }
+        )
+        self.assertEqual(compliant["explicit_step_count"], 4)
+        self.assertTrue(compliant["content_compliant"])
+        self.assertTrue(compliant["format_compliant"])
+        self.assertTrue(compliant["strict_compliant"])
+
+        superficial = score_adherence(
+            {
+                "phase1_criterion_id": "correctness",
+                "option_a_text": "Paris is the capital of France.",
+                "option_b_text": "Lyon is the capital of France.",
+                "phase1_response_text": (
+                    "Option A and Option B are both presented clearly. "
+                    "There are several differences."
+                ),
+            }
+        )
+        self.assertFalse(superficial["content_compliant"])
+        self.assertFalse(superficial["strict_compliant"])
+
 
 class CriterionSwitchActivationTests(unittest.TestCase):
     def test_activation_filter_selects_conditions_and_branches(self) -> None:
@@ -823,6 +871,52 @@ class CriterionSwitchActivationTests(unittest.TestCase):
         ].iloc[0]
         self.assertAlmostEqual(target["mean"], 0.5)
         self.assertEqual(target["n_pairs"], 4)
+
+    def test_structured_cot_adherence_association_uses_pair_variation(
+        self,
+    ) -> None:
+        rows = []
+        for pair_index in range(8):
+            for branch_index, score in enumerate((0.25, 1.0)):
+                correct = float(score == 1.0)
+                for order in ("original", "swapped"):
+                    rows.append(
+                        {
+                            "pair_id": f"p{pair_index}",
+                            "condition_id": "criterion_scaffold",
+                            "transition_type": "choice_to_choice",
+                            "branch_index": branch_index,
+                            "presentation_order": order,
+                            "criterion_procedure_score": score,
+                            "content_compliant": bool(correct),
+                            "strict_compliant": bool(correct),
+                            "forced_choice_semantic": (
+                                "A" if correct else "B"
+                            ),
+                            "phase2_target_semantic": "A",
+                            "forced_target_adoption": bool(correct),
+                        }
+                    )
+        pairs = branch_pair_rows(pd.DataFrame(rows))
+        associations = _outcome_associations(
+            pairs,
+            bootstrap=100,
+            seed=1234,
+        )
+        slope = associations[
+            associations["association"].eq("within_pair_score_slope")
+            & associations["outcome"].eq("forced_target_adoption")
+        ].iloc[0]
+        self.assertGreater(slope["estimate"], 1.0)
+        compliant = associations[
+            associations["association"].eq(
+                "both_orders_content_compliant_minus_other"
+            )
+            & associations["outcome"].eq(
+                "order_consistent_target_adoption"
+            )
+        ].iloc[0]
+        self.assertAlmostEqual(compliant["estimate"], 1.0)
 
     def test_pair_cross_fit_keeps_branches_together(self) -> None:
         rows = []

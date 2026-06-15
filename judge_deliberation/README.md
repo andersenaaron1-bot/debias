@@ -154,6 +154,20 @@ the scaffold also strengthens criterion-target and choice readouts. Set
 $ARTROOT/artifacts/mechanistic/judge_structured_cot_qwen3_8b_v1/readout.txt
 ```
 
+Measure whether the phase-one rationales actually followed the requested
+scaffold without rerunning the model:
+
+```bash
+cd "$WORKDIR" && PYTHONPATH="$WORKDIR/src" "$WORKDIR/.venv/bin/python" -m aisafety.scripts.analyze_judge_structured_cot_adherence --workspace-root "$WORKDIR" --run-dir "$ARTROOT/artifacts/mechanistic/judge_structured_cot_qwen3_8b_v1/behavior" --phase1-budget 128 --endpoint-budget 384 --bootstrap 5000 --audit-sample 32 --out-dir "$ARTROOT/artifacts/mechanistic/judge_structured_cot_qwen3_8b_v1/adherence_analysis"
+```
+
+The analyzer distinguishes numbered-step adherence from substantive criterion
+operationalization, checks grounding against both displayed responses, and
+reports pair-clustered associations with forced and order-consistent target
+adoption. It also writes `adherence_audit_sample.csv` with empty human-review
+columns. Compliance is an observational trace property: compliant versus
+noncompliant differences are diagnostic, not causal effects.
+
 After inspecting and freezing the behavioral artifact, capture exact-prefix
 activations and fit pair-held-out multiclass decoders:
 
