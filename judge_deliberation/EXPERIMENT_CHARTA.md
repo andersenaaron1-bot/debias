@@ -406,6 +406,37 @@ These associations diagnose whether successful execution co-occurs with
 criterion use; they are not causal mediation estimates. Manually validate a
 stratified sample before using the automatic adherence labels in the paper.
 
+### Computationally enforced structure
+
+The adherence follow-up showed that the prompt increased criterion-oriented
+content but all 128-token phase-one generations saturated and none completed
+the requested numbered format. The next intervention therefore externalizes
+the computation across mandatory calls while increasing the analysis budget.
+Use all 24 locked pairs, both orders, and one branch for four matched
+conditions:
+
+1. `free_long`: one 1536-token free analysis;
+2. `prompted_long`: one 1536-token criterion-scaffold analysis;
+3. `enforced_generic`: four 384-token calls for neutral planning, isolated A
+   and B summaries, and generic comparison;
+4. `enforced_criterion`: four 384-token calls for criterion tests, isolated A
+   and B assessments under frozen tests, and criterion-specific comparison.
+
+All conditions receive a separate 128-token verdict allowance. The first
+criterion stage is generated before either option is visible and is reused
+across response orders. This prevents option-conditioned test construction and
+reduces order-specific rationalization. The generic staged condition controls
+for multiple calls, isolated option processing, and expanded context without
+criterion-specific operationalization.
+
+The primary effects are enforced criterion minus free long, prompted long,
+and enforced generic on order-consistent target adoption. A rescue over all
+three supports a computational operationalization account. Improvement over
+free and prompted conditions but not over enforced generic implicates generic
+decomposition or isolation. Failure despite low stage saturation strengthens
+the conclusion that even explicit externalized decomposition does not reliably
+compile ambiguous rubric language into the criterion target.
+
 ## Phase 3: Replication
 
 Freeze the 8B design before replication.

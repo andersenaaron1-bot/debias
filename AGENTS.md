@@ -234,6 +234,10 @@ python -m aisafety.scripts.build_helpsteer2_structured_cot_suite --help
 python -m aisafety.scripts.analyze_judge_structured_cot --help
 python -m aisafety.scripts.analyze_judge_structured_cot_adherence --help
 python -m aisafety.scripts.read_judge_structured_cot --help
+python -m aisafety.scripts.build_helpsteer2_enforced_structure_suite --help
+python -m aisafety.scripts.run_judge_structured_cot_enforced --help
+python -m aisafety.scripts.analyze_judge_structured_cot_enforced --help
+python -m aisafety.scripts.read_judge_structured_cot_enforced --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_behavior --help
 python -m aisafety.scripts.run_judge_criterion_switch_activations --help
 python -m aisafety.scripts.analyze_judge_criterion_switch_decoders --help

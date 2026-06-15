@@ -29,6 +29,10 @@ from aisafety.scripts.analyze_judge_structured_cot_adherence import (
     branch_pair_rows,
     score_adherence,
 )
+from aisafety.scripts.analyze_judge_structured_cot_enforced import (
+    pair_metrics as enforced_pair_metrics,
+    trace_rows as enforced_trace_rows,
+)
 from aisafety.scripts.build_helpsteer2_criterion_switch_suite import (
     _pair_signature,
     _transition_candidates,
@@ -47,6 +51,9 @@ from aisafety.scripts.build_helpsteer2_structured_cot_suite import (
     GENERIC_SCAFFOLD,
     build_structured_cot_episodes,
 )
+from aisafety.scripts.build_helpsteer2_enforced_structure_suite import (
+    build_episodes as build_enforced_episodes,
+)
 from aisafety.scripts.build_judge_reasoning_source_pack import ATTRIBUTE_NAMES
 from aisafety.scripts.run_judge_criterion_switch_activations import (
     filter_traces,
@@ -61,6 +68,11 @@ from aisafety.scripts.run_judge_criterion_switch_behavior import (
     _semantic_verdict,
     phase1_user_content,
     phase2_update_content,
+)
+from aisafety.scripts.run_judge_structured_cot_enforced import (
+    final_content as enforced_final_content,
+    long_analysis_content,
+    stage_contents,
 )
 from aisafety.scripts.run_judge_criterion_switch_patching import _paired
 from aisafety.scripts.run_judge_criterion_confirmation_patching import (
@@ -519,6 +531,90 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
         self.assertFalse(superficial["content_compliant"])
         self.assertFalse(superficial["strict_compliant"])
 
+    def test_enforced_structure_design_and_option_isolation(self) -> None:
+        pairs = select_confirmation_pairs(
+            _confirmation_candidates(),
+            quotas=TRANSITION_QUOTAS,
+            seed=1234,
+        )
+        episodes = build_enforced_episodes(pairs, branches=1)
+        self.assertEqual(len(episodes), 192)
+        self.assertEqual(
+            {row["condition_id"] for row in episodes},
+            {
+                "free_long",
+                "prompted_long",
+                "enforced_generic",
+                "enforced_criterion",
+            },
+        )
+        episode = next(
+            row
+            for row in episodes
+            if row["condition_id"] == "enforced_criterion"
+        )
+        name, stage1 = stage_contents(episode, [])
+        self.assertEqual(name, "criterion_tests")
+        self.assertNotIn(episode["option_a_text"], stage1)
+        self.assertNotIn(episode["option_b_text"], stage1)
+
+        artifacts = [
+            {
+                "stage_name": name,
+                "response_text": "TESTS: factual accuracy",
+            }
+        ]
+        name, stage2 = stage_contents(episode, artifacts)
+        self.assertEqual(name, "option_a_assessment")
+        self.assertIn(episode["option_a_text"], stage2)
+        self.assertNotIn(episode["option_b_text"], stage2)
+
+        artifacts.append(
+            {
+                "stage_name": name,
+                "response_text": "A passes.",
+            }
+        )
+        name, stage3 = stage_contents(episode, artifacts)
+        self.assertEqual(name, "option_b_assessment")
+        self.assertIn(episode["option_b_text"], stage3)
+        self.assertNotIn(episode["option_a_text"], stage3)
+
+        artifacts.append(
+            {
+                "stage_name": name,
+                "response_text": "B fails.",
+            }
+        )
+        name, stage4 = stage_contents(episode, artifacts)
+        self.assertEqual(name, "criterion_comparison")
+        self.assertIn("A passes.", stage4)
+        self.assertIn("B fails.", stage4)
+        artifacts.append(
+            {
+                "stage_name": name,
+                "response_text": "A is supported.",
+            }
+        )
+        final = enforced_final_content(episode, artifacts)
+        self.assertIn("FINAL: A", final)
+        self.assertIn("factual accuracy", final)
+
+    def test_enforced_structure_long_prompt_control(self) -> None:
+        episode = {
+            "condition_id": "prompted_long",
+            "criterion_id": "correctness",
+            "criterion_text": "Judge correctness.",
+            "prompt": "Question",
+            "option_a_text": "A text",
+            "option_b_text": "B text",
+        }
+        prompted = long_analysis_content(episode)
+        self.assertIn(CRITERION_SCAFFOLD, prompted)
+        episode["condition_id"] = "free_long"
+        free = long_analysis_content(episode)
+        self.assertNotIn(CRITERION_SCAFFOLD, free)
+
 
 class CriterionSwitchActivationTests(unittest.TestCase):
     def test_activation_filter_selects_conditions_and_branches(self) -> None:
@@ -917,6 +1013,57 @@ class CriterionSwitchActivationTests(unittest.TestCase):
             )
         ].iloc[0]
         self.assertAlmostEqual(compliant["estimate"], 1.0)
+
+    def test_enforced_structure_pair_metrics_require_order_agreement(
+        self,
+    ) -> None:
+        traces = []
+        for pair_id in ("p1", "p2"):
+            for condition in ("free_long", "enforced_criterion"):
+                for order in ("original", "swapped"):
+                    correct = condition == "enforced_criterion"
+                    choice = (
+                        "A"
+                        if correct or order == "original"
+                        else "B"
+                    )
+                    traces.append(
+                        {
+                            "trace_id": (
+                                f"{pair_id}-{condition}-{order}"
+                            ),
+                            "pair_id": pair_id,
+                            "condition_id": condition,
+                            "transition_type": "choice_to_choice",
+                            "presentation_order": order,
+                            "branch_index": 0,
+                            "target_semantic": "A",
+                            "valid_choice": True,
+                            "final_target_semantic_selected": correct,
+                            "analysis_budget_saturation_rate": 0.0,
+                            "analysis_generated_tokens": 1024,
+                            "verdict_budget_saturated": False,
+                            "decision_checkpoint": {
+                                "forced_choice_semantic": choice,
+                                "forced_choice_confidence": 0.8,
+                                "forced_target_semantic_selected": (
+                                    choice == "A"
+                                ),
+                            },
+                        }
+                    )
+        pairs = enforced_pair_metrics(enforced_trace_rows(traces))
+        enforced = pairs[
+            pairs["condition_id"].eq("enforced_criterion")
+        ]
+        free = pairs[pairs["condition_id"].eq("free_long")]
+        self.assertTrue(
+            enforced["order_consistent_target_adoption"].eq(1.0).all()
+        )
+        self.assertTrue(
+            free["order_consistent_target_adoption"].eq(0.0).all()
+        )
+        self.assertTrue(free["order_consistent_rate"].eq(0.0).all())
 
     def test_pair_cross_fit_keeps_branches_together(self) -> None:
         rows = []

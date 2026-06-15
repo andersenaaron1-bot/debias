@@ -285,6 +285,28 @@ check and descriptive association rather than a causal mediation result. A
 manually reviewed stratified sample is required before treating automatic
 adherence labels as a paper result.
 
+\section{Experiment 3e: Computationally Enforced Deliberation}
+
+The prompted scaffold increased criterion-oriented rationale content, but the
+initial 128-token analysis saturated in every condition and did not complete
+the requested four-step format. We therefore separate instruction following
+from computational sequencing. On the same locked pairs, a criterion pipeline
+first generates tests without seeing either option, freezes those tests,
+assesses each option in a separate call, compares the isolated assessments,
+and only then forms a verdict. A generic pipeline matches the number of calls
+and token allocation using neutral planning, isolated summaries, and generic
+comparison. Long free CoT and long single-prompt criterion scaffolding control
+for the increased 1536-token analysis budget.
+
+Freezing tests before option exposure directly limits post-hoc
+criterion construction. The principal contrast is enforced criterion
+reasoning against long free CoT, long prompted structure, and staged generic
+decomposition on order-consistent target adoption. A selective rescue would
+show that the missing operation can be supplied through an external
+computation graph. A null result with low per-stage saturation would instead
+show that neither additional tokens nor mandatory decomposition is sufficient
+to turn criterion awareness into reliable criterion use.
+
 \section{Replication and Scope}
 
 The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the

@@ -168,6 +168,26 @@ adoption. It also writes `adherence_audit_sample.csv` with empty human-review
 columns. Compliance is an observational trace property: compliant versus
 noncompliant differences are diagnostic, not causal effects.
 
+Run the computationally enforced follow-up after the adherence analysis. It
+uses one branch on all 24 locked pairs and both orders for 192 traces:
+`free_long`, `prompted_long`, `enforced_generic`, and
+`enforced_criterion`. Every condition receives 1536 analysis tokens plus a
+128-token verdict allowance. Staged conditions use four mandatory 384-token
+calls:
+
+```bash
+cd "$WORKDIR" && ARTROOT="$ARTROOT" GPU=7 bash cluster/local/run_judge_structured_cot_enforced_qwen3_8b.sh
+```
+
+The criterion pipeline freezes tests before either option is shown, assesses
+A and B in isolated calls, compares those assessments, and only then requests
+the verdict. The generic pipeline matches the call count and token budget with
+neutral planning, summaries, and comparison. The run is resumable and writes:
+
+```bash
+$ARTROOT/artifacts/mechanistic/judge_structured_cot_enforced_qwen3_8b_v1/readout.txt
+```
+
 After inspecting and freezing the behavioral artifact, capture exact-prefix
 activations and fit pair-held-out multiclass decoders:
 
