@@ -70,6 +70,7 @@ from aisafety.scripts.run_judge_criterion_switch_behavior import (
     phase2_update_content,
 )
 from aisafety.scripts.run_judge_structured_cot_enforced import (
+    _read_jsonl_if_exists,
     final_content as enforced_final_content,
     long_analysis_content,
     stage_contents,
@@ -614,6 +615,11 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
         episode["condition_id"] = "free_long"
         free = long_analysis_content(episode)
         self.assertNotIn(CRITERION_SCAFFOLD, free)
+
+    def test_enforced_structure_fresh_jsonl_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "missing.jsonl"
+            self.assertEqual(_read_jsonl_if_exists(path), [])
 
 
 class CriterionSwitchActivationTests(unittest.TestCase):

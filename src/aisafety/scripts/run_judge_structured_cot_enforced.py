@@ -97,6 +97,10 @@ def _append_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
             )
 
 
+def _read_jsonl_if_exists(path: Path) -> list[dict[str, Any]]:
+    return read_jsonl(path) if path.is_file() else []
+
+
 def _options(episode: dict[str, Any]) -> str:
     return (
         f"User request:\n{episode['prompt']}\n\n"
@@ -331,11 +335,12 @@ def main() -> None:
             f"Output exists in {out_dir}; pass --resume to continue."
         )
     existing = {
-        str(row["trace_id"]) for row in read_jsonl(traces_path)
+        str(row["trace_id"])
+        for row in _read_jsonl_if_exists(traces_path)
     }
     stage1_cache = {
         str(row["stage_cache_key"]): row
-        for row in read_jsonl(stage1_path)
+        for row in _read_jsonl_if_exists(stage1_path)
     }
     labels = [
         value.strip()
@@ -563,7 +568,7 @@ def main() -> None:
             _append_jsonl(traces_path, [row])
             existing.add(trace_id)
             n_new += 1
-    traces = read_jsonl(traces_path)
+    traces = _read_jsonl_if_exists(traces_path)
     write_json(
         out_dir / "manifest.json",
         {
