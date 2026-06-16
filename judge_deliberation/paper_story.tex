@@ -9,334 +9,389 @@
 \usepackage[numbers]{natbib}
 
 \title{When Does Deliberation Improve an LLM Judge?}
-\author{Working research draft}
+\author{Working research story}
 \date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Reasoning models spend substantially more inference-time computation before
-answering difficult questions, but an evaluator does not always have a
-verifiable objective that tells it when its reasoning is complete. We study
-how native inference-time deliberation changes pairwise decisions as the
-decision criterion moves from exact and factual verification to consensus
-judgments, multi-attribute preferences, and open-ended human-versus-LLM
-evaluation. Our initial Qwen3-8B results suggest a domain-dependent tradeoff:
-thinking corrects some factual mistakes, while evaluative decisions consume
-more tokens, fail to terminate more often, and do not reliably become more
-branch-consistent. The planned experiments cross token budgets with
-within-pair criterion interventions, then trace decision evidence with fixed
-held-out activation decoders. The intended contribution is a characterization
-of when additional inference-time computation functions as useful
-verification and when it becomes prolonged search without a determinate
-stopping rule.
+Large language models are increasingly used as judges, and reasoning models
+can spend hundreds or thousands of tokens before emitting a verdict. The
+central question in this paper is not whether chain-of-thought is generally
+good or bad. It is whether visible deliberation makes a judge's stated
+criterion causally control its decision. Across factual controls, HelpSteer2,
+and SummEval, our current Qwen3-8B results support a criterion-use
+dissociation. On factual and exact-verification comparisons, the target,
+current choice, and final choice are strongly recoverable from residual
+states. On evaluative comparisons, the active criterion is often represented
+and the model can produce criterion-fluent rationales, but the
+criterion-implied target is weakly represented and ordinary rationale text
+does not reliably move the verdict. Decisions become reliably
+criterion-sensitive when the criterion is operationalized into concrete
+comparative evidence or an explicit target. Activation patching and rationale
+replay both point to the same bottleneck: awareness of the criterion is not
+the same as constructing and using the decision variable implied by that
+criterion.
 \end{abstract}
 
-\section{The Paper Story}
+\section{One-Sentence Claim}
 
-Chain-of-thought is not uniformly useful. Broad evaluations find its clearest
-benefits on mathematical and symbolic tasks \citep{sprague2024tocot}, while
-other work identifies tasks on which verbal deliberation can reduce
-performance \citep{liu2024mindstep}. Native reasoning models make this question
-more consequential because they allocate hundreds or thousands of tokens
-without an external verifier deciding when enough computation has occurred.
-Qwen3 is a useful substrate because the same post-trained checkpoint exposes
-native thinking and non-thinking modes \citep{qwen2025qwen3}.
+LLM judges can know what criterion they are supposed to apply, and can
+generate rationales that sound criterion-aware, while their final decisions
+remain controlled by a different or under-operationalized decision variable.
+Operationalized evidence and explicit targets repair this gap far more
+reliably than longer or more structured chain-of-thought.
 
-LLM judging is a particularly sharp test case. Some judge decisions have
-checkable criteria, such as deciding which proposed answer is factually
-correct. Others ask the model to aggregate helpfulness, correctness, clarity,
-style, and values without specifying a total ordering. Existing judge research
-shows that such decisions are sensitive to response order, prompt framing,
-verbosity, and model identity \citep{zheng2023judging,wang2023position,
-panickssery2024selfrecognition}. Additional deliberation could improve these
-decisions by integrating more evidence. It could instead generate a longer
-rationale around a choice for which no unique verification signal exists.
+\section{Why This Is the Paper}
 
-Our central hypothesis is therefore not that reasoning is generally harmful.
-It is that the return to inference-time computation depends on the
-determinacy of the decision criterion. Exact tasks provide a recognizable
-success condition. Plural judgments may not.
+Chain-of-thought has its clearest reported benefits on mathematical and
+symbolic tasks \citep{sprague2024tocot}, and can be neutral or harmful in
+other settings \citep{liu2024mindstep}. LLM judges are a useful stress test
+because they often evaluate pairs under plural criteria: helpfulness,
+correctness, coherence, relevance, fluency, and overall quality. Existing
+LLM-as-judge work already shows sensitivity to order, prompt framing, and
+model identity \citep{zheng2023judging,wang2023position,
+panickssery2024selfrecognition}. Our contribution is to ask where the
+decision actually comes from when a reasoning judge is told to deliberate
+under a specific criterion.
 
-\section{Initial Evidence}
+The paper should not be framed as ``CoT is unfaithful'' in the broad sense.
+The narrower and stronger framing is:
 
-In the first Qwen3-8B scout, native thinking improved majority decisions on ARC
-Challenge and TruthfulQA, including wrong-to-correct transitions without
-corresponding correct-to-wrong majority transitions. The same condition
-generated much longer traces on HelpSteer2 tradeoffs, D4 human-versus-LLM
-pairs, and ETHICS Commonsense. It also produced substantially more
-budget-saturated invalid outputs. Branch agreement did not improve reliably.
+\begin{quote}
+  Evaluative CoT can expose a representation/action gap. The model represents
+  the requested criterion, but unless the criterion is made operational as
+  target evidence, that representation need not control the verdict.
+\end{quote}
 
-This is suggestive but insufficient. The current result confounds criterion
-determinacy, ordinary difficulty, and a finite output budget. It also measures
-natural termination rather than the decision the model would make if stopped
-at a controlled prefix. The next experiment addresses both limitations.
+This framing connects CoT faithfulness concerns \citep{lanham2023faithfulness}
+to LLM-as-judge transparency. It also explains why factual verification looks
+different: factual tasks provide a goal state that is easier to operationalize.
 
-\section{Experiment 1: Budgeted Deliberation}
+\section{Result Inventory}
 
-We construct a progression from mathematical verification and logical
-deduction through factual and consensus decisions to dominated preferences,
-attribute-level tradeoffs, overall-quality tradeoffs, and ecological
-human-versus-LLM judgments. For every sampled reasoning branch, we generate one
-maximal native thinking trace. We then truncate that same trace at fixed token
-budgets, close the reasoning block, and score an A/B verdict. This design
-separates the information gained from additional reasoning from independent
-sampling noise across budget conditions.
+\subsection{Factual-to-Evaluative Motivation}
 
-The primary result is a budget-by-task interaction. For exact and factual
-tasks, useful deliberation should increase target accuracy and then plateau.
-For underspecified judgments, the criterion-uncertainty hypothesis predicts
-longer natural traces and lower termination without comparable improvements in
-order consistency, branch agreement, or defensible target performance.
+The broad budget sweep motivates the main contrast. At a 2048-token thinking
+budget, factual and exact-verification tasks show high validity and strong
+decision convergence. ARC Challenge reaches natural-validity $1.00$,
+forced-target success $0.967$, and order-consistent majority rate $1.00$.
+GSM8K verification reaches forced-target success $1.00$ and order-consistent
+majority rate $1.00$. TruthfulQA reaches forced-target success $0.911$ and
+order-consistent majority rate $0.967$.
 
-\section{Experiment 2: Criterion Rescue}
+The factual activation baseline establishes the scale of a well-formed
+decision variable. Pair-held-out readouts on factual tasks decode active
+criterion at approximately $0.96$--$1.00$ balanced accuracy, criterion target
+at $0.82$--$0.93$, current choice at $0.98$--$0.99$, and final choice at
+$0.87$--$0.99$. This is the comparison point for the weaker evaluative
+readouts.
 
-Task categories alone cannot show that the criterion causes the difference.
-We therefore hold HelpSteer2 and D4 response pairs fixed while changing the
-decision rule. The model judges the same pair by overall quality, correctness,
-helpfulness, coherence or clarity, and an explicit weighted rubric.
-HelpSteer2's attribute annotations provide criterion-specific proxy targets.
-D4 remains unlabeled but supports termination, consistency, and authorship
-analyses.
+\subsection{HelpSteer2 Criterion Confirmation}
 
-A criterion-rescue result would show that explicit decision rules shorten
-reasoning, reduce budget saturation, or improve stability relative to an
-overall-quality judgment on the same texts. This would distinguish criterion
-uncertainty from subject matter and text difficulty.
+The locked HelpSteer2 confirmation suite separates criterion language from
+operationalized evidence. Criterion-only conditions are modest: early
+criterion forced-target adoption is $0.594$ and late criterion adoption is
+$0.531$. Supplying criterion-specific score evidence raises the corresponding
+conditions to approximately $0.990$ for both early and late evidence. A late
+explicit target reaches $1.000$.
 
-Our first evidence collector makes the HelpSteer2 comparison fully matched.
-It samples Pareto-dominant, single-attribute, tradeoff, and annotation-near-tie
-pairs, then presents every pair under every criterion and in both response
-orders. The judge may answer A, B, or C, where C is explicitly defined as tied
-or underdetermined under the stated rule. Correctness in this experiment means
-compliance with that rule and the corresponding HelpSteer2 attribute proxy. It
-does not mean that HelpSteer2 defines a universal ranking of response quality.
-The strongest outcome is therefore criterion-contingent switching with order
-invariance: the verdict changes when the annotated target changes, remains
-stable when it should not change, and uses C selectively rather than as an
-escape response.
+The pair-bootstrap effects are large. Evidence operationalization improves
+forced-target adoption over criterion-only prompting by $+0.396$ early and
+by $+0.458$ late. It improves order-consistent target adoption by $+0.521$ early
+and $+0.604$ late. The current behavioral readout therefore supports
+``awareness without reliable operationalization'' more strongly than
+``late commitment blocks later correction.'' The model can follow the target
+when the target is supplied or made computable; it often fails to derive that
+target from the criterion alone.
 
-\section{Experiment 3: Decision Formation}
+\subsection{HelpSteer2 Structure Controls}
 
-Visible reasoning is not assumed to faithfully report the computation that
-caused the answer \citep{lanham2023faithfulness}. The mechanistic analysis asks
-when final-choice and criterion information become linearly recoverable from
-residual states. Unlike point-specific probes, the paper-facing analysis trains
-a decoder only on endpoint states, selects it on separate pairs, freezes it,
-and applies it across earlier states on held-out pairs. This creates a
-comparable evidence scale across generated-token positions.
+Prompted and computationally enforced structure do not rescue criterion use.
+In the structured-CoT suite, free CoT reaches forced-target adoption $0.635$
+and order-consistent target adoption $0.521$. The criterion scaffold reaches
+$0.594$ and $0.521$, generic scaffold reaches $0.573$ and $0.375$, and
+score-evidence reaches $1.000$ and $1.000$.
 
-The descriptive outcomes are evidence emergence, persistent commitment,
-revisions, confidence velocity, path efficiency, and branch convergence. A
-particularly relevant pattern would be stable choice evidence before stable
-criterion evidence on underspecified judgments. That pattern remains
-associational until replay interventions with sign-reversed and random
-orthogonal controls change final verdicts.
+The adherence analysis shows that the criterion scaffold does change the
+surface reasoning. Its criterion-procedure score exceeds free CoT by $+0.120$,
+and content-compliance increases by $+0.135$. That does not translate into
+better criterion adherence. In fact, both-orders content-compliant traces show
+lower order-consistent target adoption in this small sample.
 
-\section{Experiment 3a: Criterion Representation and Use}
+The enforced-structure suite strengthens the negative result. Long free CoT
+reaches forced-target adoption $0.625$ and order-consistent adoption $0.500$.
+Prompted long reasoning reaches $0.562$ and $0.417$. Enforced generic staging
+falls to $0.354$ and $0.292$, and enforced criterion staging reaches only
+$0.417$ and $0.208$. Mandatory decomposition increases natural validity but
+does not make the criterion govern the decision.
 
-The matched HelpSteer2 scout suggests a more specific failure than generic
-evaluative difficulty. Qwen3-8B usually preserves a semantic preference when
-the requested criterion changes, even while extended reasoning raises
-confidence and sometimes increases order stability. We therefore distinguish
-criterion representation, criterion-conditioned target construction, and
-choice control.
+\subsection{HelpSteer2 Mechanistic Evidence}
 
-On a held-out HelpSteer2 sample, each response pair supplies two criteria whose
-targets either oppose one another, differ by tie versus choice, or agree. A
-staged protocol elicits 128 tokens of analysis, then either preserves, reminds,
-switches, withholds, or neutrally restates the decision rule before a further
-384 tokens. Hidden A/B/C readouts measure whether a criterion update changes
-the model's current verdict before and after additional reasoning.
+Fixed-layer readouts show a separation between criterion identity and decision
+control. The active criterion is strongly decodable at the intended
+criterion-update point, including balanced accuracy $1.000$ at
+phase1\_readout\_128 and approximately $0.81$ at phase2\_readout\_0. In
+contrast, criterion-target readouts remain weak, roughly $0.39$--$0.50$ across
+the main readout points, and final-choice readouts are only modest.
 
-The activation artifact replays these exact sampled prefixes. Point-level
-labels identify the active criterion, its implied semantic target, and the
-eventual semantic choice. Pair-held-out endpoint decoders are frozen and
-applied across time. This yields three separable outcomes: the criterion fails
-to update, the criterion updates without a target update, or criterion and
-target update while choice remains anchored. Only the third pattern directly
-supports a rationalization-like dissociation.
+The patching result is the causal centerpiece. A matched criterion-update
+residual does not rescue the verdict; its target-selected effect is negative
+in the current sample ($-0.111$ versus baseline). Evidence-operationalization
+patching is large and selective: matched evidence deltas increase target
+selection by $+0.611$, target probability by $+0.604$, and target logit margin
+by $+13.289$. Explicit-target patching has the same qualitative pattern,
+raising target selection by $+0.625$ and target probability by $+0.601$.
 
-The confirmatory readout is taken at the exact forced-verdict boundary after
-closing the reasoning block and appending \texttt{FINAL:}. We distinguish this
-state from the last free-generation token. Decoder hyperparameters are selected
-on frozen fit and selection pairs, while temporal estimates are cross-fitted
-and bootstrapped by source pair so that response-order variants, conditions,
-and sampled branches are not treated as independent observations.
+This gives the strongest local mechanistic interpretation: the model contains
+states that causally move the decision when the target is operationalized, but
+the criterion-update state alone is not sufficient.
 
-We first calibrate the same readout on completed factual and verification
-traces from ARC Challenge, BBH logical deduction, GSM8K, MATH-500, and
-TruthfulQA at matched token budgets. This comparison does not turn probe
-accuracy into a universal quality score. It establishes the within-model
-recoverability and temporal-transfer pattern obtained when the decision
-criterion has an externally checkable target.
+\subsection{SummEval External Validation}
 
-\section{Experiment 3b: Criterion-State Patching}
+SummEval validates the same phenomenon in a different evaluative domain. The
+criteria are coherence, consistency, fluency, and relevance. Overall endpoint
+adoption is high because many pairs are same-target or tie-to-choice cases:
+free CoT reaches forced-target adoption $0.823$ and order-consistent adoption
+$0.771$; generic scaffold reaches $0.844$ and $0.802$; criterion scaffold
+reaches $0.807$ and $0.719$.
 
-Descriptive decoding does not establish control. For the same pair, order, and
-sampled branch, we subtract the reminder-condition residual state from the
-switch-condition state. Adding that within-pair criterion difference to a
-reminder replay tests whether criterion-induced state changes are sufficient
-to redirect the verdict. Negative, same-target placebo, shuffled-pair, and
-presentation-order controls bound nonspecific perturbation effects.
+The important stratum is criterion\_flip, where the criterion changes which
+summary should win. In that stratum, free CoT reaches only $0.547$
+forced-target adoption and $0.469$ order-consistent adoption. Criterion
+scaffold is similar or worse at $0.531$ and $0.375$. Generic scaffold is
+$0.594$ and $0.500$. Score evidence reaches $1.000$ and $1.000$, while
+explicit target reaches $0.938$ and $0.938$.
 
-The causal claim remains local to the tested layer, point, model, and replay
-protocol. A successful patch shows criterion-state influence over the verdict;
-an accurate decoder without a successful patch shows representation without
-demonstrated causal use.
+The endpoint effects make the same point as HelpSteer2. Criterion scaffold
+does not improve over free CoT; its forced-target effect is $-0.016$ overall
+and its order-consistent effect is $-0.052$. Score evidence improves over free
+CoT by $+0.177$ forced adoption and $+0.229$ order-consistent adoption.
 
-\section{Experiment 3c: Locked Operationalization Confirmation}
+\subsection{SummEval Activation Evidence}
 
-The initial 72 criterion-switch pairs are treated as development data. We
-freeze the prompt construction and readout protocol before selecting 24 new
-HelpSteer2 pairs: nine choice-to-choice conflicts, nine transitions from an
-initial criterion tie to a criterion-resolved choice, and six same-target
-controls. A blinded human audit checks both active criteria in both response
-orders, for 96 criterion-specific judgments.
+The SummEval activation readouts reproduce the representation/use split.
+Active criterion is near-perfectly decodable at phase1\_readout\_128 and
+phase2\_readout\_0 across conditions. Even by phase2\_readout\_384, active
+criterion remains decodable, for example $0.917$ in criterion scaffold and
+$0.854$ in free CoT.
 
-The confirmatory manipulation crosses whether the updated criterion is
-available before or after a 128-token initial analysis with whether the model
-also receives the two criterion-specific HelpSteer scores. The scores make the
-criterion comparison directly computable but do not state the A/B/C verdict.
-A separate late explicit-target condition supplies a downstream ceiling on 12
-conflict pairs.
+Criterion-target readouts are much weaker: roughly $0.54$--$0.59$ at
+phase2\_readout\_0 and $0.53$--$0.61$ at phase2\_readout\_384. Current-choice
+and final-choice readouts are noisy and much less reliable than the factual
+baseline. Thus the model represents which criterion is active, but the
+criterion-implied target is not comparably installed as a decision variable.
 
-This factorial distinguishes three explanations. A general evidence benefit
-indicates that the criterion-only prompt did not make the target sufficiently
-computable. A selective loss of that benefit after prior commitment indicates
-that answer formation gates later criterion use. Failure even when the
-criterion target is supplied directly places the bottleneck downstream of
-target construction. We reserve ``rationalization-like'' for the
-commitment-dependent pattern and require causal replay before claiming that
-the generated explanation preserves rather than produces the verdict.
+\subsection{SummEval Rationale Replay}
 
-\paragraph{Current confirmatory pattern.}
-The locked behavioral sample does not show a meaningful early-versus-late
-commitment penalty. Criterion-only forced target adoption is approximately
-$0.59$ when the updated criterion is early and $0.53$ when it is late.
-Supplying criterion-specific score evidence raises both conditions to
-approximately $0.99$, and a late explicit target reaches $1.00$. The strongest
-current interpretation is therefore that the model can respond to an
-operationalized criterion target but does not reliably construct that target
-from criterion language alone. This supports awareness or representation
-without reliable operationalization; it does not yet support
-commitment-driven rationalization.
+Rationale replay asks whether text that looks like reasoning can transplant a
+decision. Ordinary rationale text does not. Same-free and same-scaffold replay
+produce little or no improvement over baseline. Opposite-free and
+opposite-scaffold replay also produce little or no movement toward the donor
+decision.
 
-\paragraph{Mechanistic adjudication.}
-We freeze the development-selected readout layers before opening the
-confirmatory activations. Pair-held-out probes measure the active criterion,
-criterion target, current choice, and final choice at the exact
-\texttt{FINAL:} boundary. The causal test patches three matched residual
-differences: early criterion minus late criterion after the phase-one analysis,
-late score evidence minus late criterion immediately after the phase-two
-update, and late explicit target minus late criterion at the same point.
-Positive patches are compared with sign-reversed, norm-matched random
-orthogonal, shuffled same-target, shuffled opposite-target, and
-same-target-transition controls. A selective increase in target probability
-or target logit margin would show that the missing operationalized state is
-sufficient to influence the verdict. Strong decoding without a selective
-patch effect would instead localize the failure to downstream use.
+Score-evidence replay does move the decision. Same-score replay improves
+updated-target adoption by $+0.312$ in native replay and $+0.188$ in quoted
+replay. Opposite-score replay reduces recipient target adoption by $-0.531$ in
+native replay and $-0.500$ in quoted replay, with probability shifts of
+$-0.466$ and $-0.415$. Compared with opposite ordinary rationales, opposite
+score evidence shifts recipient-minus-donor logit margin by roughly
+$-4.2$ to $-4.4$.
 
-\section{Experiment 3d: Does Structured Reasoning Compile the Rubric?}
+This is the clearest behavioral test of decision origin. The model is not
+strongly following arbitrary transplanted rationale prose. It follows
+operational comparative evidence.
 
-The operationalization gap may arise because reasoning post-training teaches
-models to continue familiar computational trajectories, while a natural
-language criterion alone does not specify a sufficiently familiar procedure.
-We test this account without changing the responses, criteria, targets, or
-human audit. On the same locked 24 pairs, free CoT is compared with two
-four-step scaffolds. The criterion-operational scaffold translates the active
-rule into observable tests, applies the same tests to each option, and then
-compares the criterion-specific assessments. The generic scaffold matches the
-step count and approximate instruction length but instead requests balanced
-summaries and surface comparison without compiling the criterion.
+\section{Paper Structure}
 
-Score evidence remains an operationalization ceiling, and the existing
-explicit-target condition remains a downstream ceiling. A deduplicated
-direct-answer condition measures whether generated reasoning helps beyond the
-model's immediate criterion-conditioned readout. The primary outcome is
-order-consistent target adoption across both response orders, followed by
-forced target adoption, natural validity, confidence, and budget saturation.
-Checkpoint readouts determine whether any scaffold advantage emerges during
-the initial 128-token analysis or only during the subsequent 384-token
-continuation. A branch-zero activation replay applies the previously frozen
-criterion, target, current-choice, and final-choice decoders to all four main
-conditions. This tests whether behavioral rescue is accompanied by a stronger
-criterion-conditioned target representation rather than only a different
-surface rationale.
+\paragraph{1. Introduction.}
+Introduce LLM judges as a deployment-relevant setting where reasoning traces
+are used for transparency. State the central risk: a judge may verbalize the
+criterion without making the criterion control the verdict.
 
-A criterion-scaffold advantage over both free CoT and generic structure would
-support the hypothesis that an imposed computation sequence helps compile
-rubric language into a usable target. Improvement over free CoT but not generic
-structure would instead implicate generic attention or decomposition. If
-scores remain effective while both scaffolds fail, the stronger conclusion is
-that criterion-specific numerical evidence supplies a target-like state that
-natural language reasoning procedures do not reliably construct.
+\paragraph{2. Conceptual model.}
+Separate four objects: active criterion, criterion-implied target, current or
+final choice, and visible rationale. Deliberation requires these to align over
+time. Rationalization-like behavior occurs when criterion information is
+present but the choice remains controlled elsewhere. Operationalization is
+the process that turns a criterion into concrete target evidence.
 
-We separate failure of the intervention from failure to follow its
-instructions. Phase-one rationales are scored for explicit step structure and
-for substantive criterion operationalization: criterion reference,
-operational tests, symmetric application and textual grounding for both
-options, criterion-specific comparison, and withholding of a premature final
-answer. Pair-clustered within-pair analyses test whether stronger adherence is
-associated with forced and order-consistent target adoption. Because
-adherence is a post-treatment trace property, this analysis is a manipulation
-check and descriptive association rather than a causal mediation result. A
-manually reviewed stratified sample is required before treating automatic
-adherence labels as a paper result.
+\paragraph{3. Factual controls.}
+Show that on factual and exact-verification tasks, target and choice are
+recoverable and deliberation often converges. This prevents the paper from
+claiming that probes are generally weak or that the model cannot represent
+decision variables.
 
-\section{Experiment 3e: Computationally Enforced Deliberation}
+\paragraph{4. HelpSteer2 criterion confirmation.}
+Present criterion-only, evidence, and explicit-target conditions. Emphasize
+that score evidence rescues both early and late updates, while criterion
+language alone does not.
 
-The prompted scaffold increased criterion-oriented rationale content, but the
-initial 128-token analysis saturated in every condition and did not complete
-the requested four-step format. We therefore separate instruction following
-from computational sequencing. On the same locked pairs, a criterion pipeline
-first generates tests without seeing either option, freezes those tests,
-assesses each option in a separate call, compares the isolated assessments,
-and only then forms a verdict. A generic pipeline matches the number of calls
-and token allocation using neutral planning, isolated summaries, and generic
-comparison. Long free CoT and long single-prompt criterion scaffolding control
-for the increased 1536-token analysis budget.
+\paragraph{5. Mechanistic HelpSteer2 evidence.}
+Present active-criterion decoding, weak criterion-target decoding, and the
+patching contrast. This is the local causal section.
 
-Freezing tests before option exposure directly limits post-hoc
-criterion construction. The principal contrast is enforced criterion
-reasoning against long free CoT, long prompted structure, and staged generic
-decomposition on order-consistent target adoption. A selective rescue would
-show that the missing operation can be supplied through an external
-computation graph. A null result with low per-stage saturation would instead
-show that neither additional tokens nor mandatory decomposition is sufficient
-to turn criterion awareness into reliable criterion use.
+\paragraph{6. Structured reasoning controls.}
+Show that prompting the model to reason in a criterion-aware format, and even
+forcing multi-call decomposition, does not reproduce the evidence/target
+rescue. This rules out the simple remedy ``ask for a better rationale.''
 
-\section{Replication and Scope}
+\paragraph{7. SummEval validation.}
+Show the same pattern on coherence, consistency, fluency, and relevance. Focus
+on criterion-flip cases. Include SummEval activation readouts.
 
-The complete design is discovered and frozen on Qwen3-8B. Qwen3-30B-A3B is the
-preferred scale replication because it supports the same native
-thinking/non-thinking interface while activating relatively few parameters.
-Qwen3-32B supplies a dense same-family check. Phi-4-reasoning-plus can provide
-a cross-family replication after the behavioral estimands are fixed.
-Reasoning-specialized checkpoints are post-trained systems, so the main
-comparison is inference mode and criterion structure rather than a claim that
-pretrained base models expose the same reasoning policy.
+\paragraph{8. Rationale replay.}
+Use ordinary-rationale versus score-evidence transplant as the final
+adjudication. Rationale prose does not reliably carry the decision; operational
+evidence does.
+
+\paragraph{9. Discussion.}
+Frame the result as a representation-to-control gap in evaluative reasoning.
+Discuss implications for LLM-as-judge use, CoT faithfulness, rubric design,
+and mechanistic audits of evaluators.
+
+\section{Figure and Table Plan}
+
+\begin{description}[leftmargin=3.6cm,style=nextline]
+\item[Figure 1]
+Conceptual pipeline: criterion identity $\rightarrow$ target construction
+$\rightarrow$ choice control $\rightarrow$ rationale. Mark the observed gap
+between criterion identity and target/choice control.
+
+\item[Figure 2]
+Factual-to-evaluative motivation. Plot factual baseline target/choice
+recoverability and behavioral convergence against evaluative conditions.
+
+\item[Figure 3]
+HelpSteer2 confirmation behavior. Bars for criterion-only, evidence, and
+explicit-target conditions, early and late.
+
+\item[Figure 4]
+HelpSteer2 activation and patching. One panel for active-criterion versus
+criterion-target decoding; one panel for criterion-update, evidence, and
+explicit-target patch effects.
+
+\item[Figure 5]
+Structured-reasoning controls. Free CoT, criterion scaffold, generic scaffold,
+enforced staging, score evidence, and explicit target.
+
+\item[Figure 6]
+SummEval criterion-flip validation. Free/scaffold/generic versus score
+evidence and explicit target.
+
+\item[Figure 7]
+Rationale replay. Ordinary rationale transplant versus score-evidence
+transplant, same and opposite donor directions, native and quoted modes.
+
+\item[Table 1]
+Dataset and condition inventory, including pair counts, criteria, transition
+strata, branches, and readout budgets.
+
+\item[Table 2]
+Result ledger with exact numerical endpoints and confidence intervals for the
+main claims.
+
+\item[Appendix tables]
+Adherence analysis, enforced-structure token use, dataset-stratified SummEval
+effects, and all control patch settings.
+\end{description}
+
+\section{Thirty-Billion-Scale Replication Gate}
+
+The larger-model run should be a coherent confirmation suite, not another
+exploratory grid. The minimum 30B replication should rerun:
+
+\begin{enumerate}[leftmargin=0.7cm]
+\item HelpSteer2 confirmation behavior on the locked pair set:
+early criterion, late criterion, early evidence, late evidence, and explicit
+target.
+\item SummEval structured behavior on the locked SummEval pair set:
+free CoT, generic scaffold, criterion scaffold, score evidence, and explicit
+target, preserving criterion\_flip, same\_target, and tie\_to\_choice strata.
+\item SummEval rationale replay:
+same/opposite free CoT, same/opposite criterion scaffold, same/opposite score
+evidence, in native and quoted modes.
+\item Optional if runtime permits: SummEval activation capture at the same
+readout points, focused on criterion\_flip cases rather than the full grid.
+\end{enumerate}
+
+The replication succeeds if the qualitative ordering is stable:
+
+\begin{itemize}[leftmargin=0.7cm]
+\item score evidence and explicit target remain substantially above
+criterion-only and scaffold conditions;
+\item criterion scaffold does not reliably outperform free CoT or generic
+structure on criterion-flip cases;
+\item ordinary rationale replay has little effect compared with baseline;
+\item score-evidence replay moves decisions strongly in the donor direction;
+\item active criterion, if captured, remains easier to decode than
+criterion-implied target or final choice in evaluative settings.
+\end{itemize}
+
+The 30B run does not need to replicate enforced structure, adherence scoring,
+or full patching before a first conference submission. Those are useful
+appendix or follow-up results. The main larger-model question is whether the
+behavioral and replay dissociation survives scale.
+
+\section{Venue Positioning}
+
+The natural positioning is interpretability and transparency for LLM judges,
+with evaluation as the application domain. The paper is strongest when it is
+not sold as a new benchmark and not sold as a universal claim about all
+reasoning. It is a mechanistically motivated study of when stated evaluative
+criteria become decision-controlling variables.
+
+\begin{description}[leftmargin=3.3cm,style=nextline]
+\item[COLM]
+Best overall fit if the paper emphasizes language-model reasoning,
+judge behavior, and evaluation methodology.
+\item[ACL/EMNLP Findings]
+Plausible if framed around LLM-as-judge reliability, rubric following, and
+evaluation transparency.
+\item[BlackboxNLP or NLP interpretability workshops]
+Very natural fit, especially if the first version is compact and
+mechanistic.
+\item[ICLR/NeurIPS workshops]
+Good fit for the activation patching and CoT faithfulness angle.
+\item[FAccT]
+Possible but secondary; the current evidence is more mechanistic than
+sociotechnical unless the deployment-risk framing is expanded.
+\item[ICLR/NeurIPS/ICML main track]
+Ambitious. Plausibility improves if the 30B replication is clean and the
+paper is framed as a general representation-to-control failure mode in
+deliberative evaluators.
+\end{description}
 
 \section{Claim Ledger}
 
-\begin{description}[leftmargin=3.2cm,style=nextline]
-\item[Motivated]
-Thinking benefits some factual controls but creates more nontermination on
-evaluative tasks in Qwen3-8B.
-\item[Not established]
-The effect is caused by criterion uncertainty rather than finite budget,
-difficulty, or prompt format.
-\item[Required]
-Budget curves, criterion rescue, one approximately 30B replication, and fixed
-held-out trajectory decoders.
-\item[Criterion-use gate]
-The active criterion and its implied target must be decoded on held-out pairs.
-A rationalization-like claim additionally requires persistent choice evidence
-despite criterion or target updating.
-\item[Causal gate]
-Only controlled activation replay can support a claim that an early decoded
-direction influences the final verdict.
+\begin{description}[leftmargin=3.6cm,style=nextline]
+\item[Established by current 8B results]
+Criterion identity can be represented without reliable criterion-target
+construction or choice control. Operational score evidence and explicit targets
+repair the decision far more reliably than ordinary or scaffolded CoT.
+
+\item[Supported mechanistically]
+Evidence and explicit-target residual directions causally move HelpSteer2
+verdicts in patching. Criterion-update residuals alone do not show the same
+selective effect.
+
+\item[Supported by replay]
+Ordinary rationale text is weak as a decision transplant. Score-evidence text
+is strong, including in opposite-target replay and quoted replay.
+
+\item[Not yet claimed broadly]
+The phenomenon is not yet shown for all models, all evaluator tasks, or all
+reasoning-trained systems.
+
+\item[Main missing gate]
+One larger-model replication, preferably Qwen3-30B-A3B or another same-family
+reasoning model, showing the same behavioral and replay ordering.
+
+\item[Paper-safe headline]
+``In evaluative LLM judging, chain-of-thought can make criteria explicit in
+the rationale without making them decision-controlling; operationalized
+evidence, not rationale structure, is what reliably redirects the verdict.''
 \end{description}
 
 \bibliographystyle{plainnat}

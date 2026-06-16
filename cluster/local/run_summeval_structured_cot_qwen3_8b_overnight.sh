@@ -73,7 +73,7 @@ planned_pairs=$((MAX_PAIRS_PER_TRANSITION * 3))
 planned_traces=$((planned_pairs * ((4 * 2 * MAIN_BRANCHES) + (2 * CEILING_BRANCHES))))
 planned_direct=$((planned_pairs * 2))
 
-echo "Running Qwen3-8B SummEval structured-CoT validation suite"
+echo "Running SummEval structured-CoT validation suite"
 echo "  run_tag=$RUN_TAG"
 echo "  model=$RUN_LABEL :: $MODEL_ID"
 echo "  gpu=$GPU"

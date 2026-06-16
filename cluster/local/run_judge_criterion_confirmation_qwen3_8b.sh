@@ -52,7 +52,7 @@ if [[ "$BUILD_ONLY" == "1" && "$RUN_ONLY" == "1" ]]; then
   exit 1
 fi
 
-echo "Running locked Qwen3-8B criterion confirmation"
+echo "Running locked criterion confirmation"
 echo "  run_tag=$RUN_TAG"
 echo "  model=$RUN_LABEL :: $MODEL_ID"
 echo "  gpu=$GPU"
