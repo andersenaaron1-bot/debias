@@ -17,6 +17,7 @@ BEHAVIOR_DIR="${BEHAVIOR_DIR:-$OUT_ROOT/behavior}"
 ANALYSIS_DIR="${ANALYSIS_DIR:-$OUT_ROOT/analysis}"
 ACTIVATION_DIR="${ACTIVATION_DIR:-$OUT_ROOT/activations}"
 ACTIVATION_ANALYSIS_DIR="${ACTIVATION_ANALYSIS_DIR:-$OUT_ROOT/activation_analysis}"
+REPLAY_DIR="${REPLAY_DIR:-$OUT_ROOT/rationale_replay}"
 LOG_DIR="${LOG_DIR:-$OUT_ROOT/logs}"
 
 SUMMEVAL_JSONL="${SUMMEVAL_JSONL:-}"
@@ -43,6 +44,11 @@ ACTIVATION_CONDITIONS="${ACTIVATION_CONDITIONS:-free_cot,generic_scaffold,criter
 ACTIVATION_BRANCHES="${ACTIVATION_BRANCHES:-0}"
 SELECTED_LAYERS="${SELECTED_LAYERS:-4,8,12,16,20,24,28,32}"
 TARGET_LAYERS="${TARGET_LAYERS:-active_criterion:20,criterion_target:32,current_choice:28,final_choice:32,presentation_order:12}"
+RUN_REPLAY="${RUN_REPLAY:-0}"
+REPLAY_DONOR_CONDITIONS="${REPLAY_DONOR_CONDITIONS:-free_cot,criterion_scaffold,score_evidence}"
+REPLAY_MODES="${REPLAY_MODES:-native,quoted}"
+REPLAY_BRANCHES="${REPLAY_BRANCHES:-0}"
+REPLAY_MAX_PAIRS="${REPLAY_MAX_PAIRS:-0}"
 USE_4BIT="${USE_4BIT:-0}"
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 FORCE_SUITE_REBUILD="${FORCE_SUITE_REBUILD:-0}"
@@ -79,6 +85,7 @@ echo "  target_pair_cap=$planned_pairs"
 echo "  planned_upper_bound_traces=$planned_traces"
 echo "  planned_upper_bound_direct_rows=$planned_direct"
 echo "  run_activations=$RUN_ACTIVATIONS"
+echo "  run_replay=$RUN_REPLAY"
 
 run_logged() {
   local name="$1"
@@ -236,6 +243,64 @@ if [[ "$RUN_ACTIVATIONS" == "1" ]]; then
   fi
 fi
 
+if [[ "$RUN_REPLAY" == "1" ]]; then
+  if [[ "$SKIP_EXISTING" != "1" || ! -s "$REPLAY_DIR/manifest.json" ]]; then
+    replay_args=(
+      "$PYTHON" -m aisafety.scripts.run_summeval_rationale_replay
+      --workspace-root "$WORKDIR"
+      --behavior-dir "$BEHAVIOR_DIR"
+      --suite-dir "$SUITE_DIR"
+      --run-label "$RUN_LABEL"
+      --model-id "$MODEL_ID"
+      --cache-dir "$HF_HOME"
+      --prompt-style chat_template
+      --labels A,B,C
+      --donor-conditions "$REPLAY_DONOR_CONDITIONS"
+      --replay-modes "$REPLAY_MODES"
+      --include-branches "$REPLAY_BRANCHES"
+      --max-pairs "$REPLAY_MAX_PAIRS"
+      --max-score-length "$MAX_SCORE_LENGTH"
+      --score-batch-size "$SCORE_BATCH_SIZE"
+      --bootstrap "$BOOTSTRAP"
+      --seed "$SEED"
+      --out-dir "$REPLAY_DIR"
+    )
+    if [[ "$USE_4BIT" == "1" ]]; then replay_args+=(--use-4bit); fi
+    if [[ -s "$REPLAY_DIR/replay_rows.jsonl" ]]; then
+      replay_args+=(--resume)
+    fi
+    echo "launch SummEval rationale replay gpu=$GPU"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      printf '  CUDA_VISIBLE_DEVICES=%q ' "$GPU"
+      printf '%q ' "${replay_args[@]}"
+      printf '\n'
+    else
+      if CUDA_VISIBLE_DEVICES="$GPU" "${replay_args[@]}" \
+        >"$LOG_DIR/rationale_replay.out" 2>"$LOG_DIR/rationale_replay.err"; then
+        :
+      else
+        status=$?
+        echo "FAILED rationale_replay status=$status" >&2
+        echo "--- $LOG_DIR/rationale_replay.out tail ---" >&2
+        tail -n 80 "$LOG_DIR/rationale_replay.out" >&2 || true
+        echo "--- $LOG_DIR/rationale_replay.err tail ---" >&2
+        tail -n 80 "$LOG_DIR/rationale_replay.err" >&2 || true
+        exit "$status"
+      fi
+    fi
+  else
+    echo "skip existing rationale replay -> $REPLAY_DIR"
+  fi
+
+  if [[ "$DRY_RUN" != "1" ]]; then
+    "$PYTHON" -m aisafety.scripts.read_summeval_rationale_replay \
+      --workspace-root "$WORKDIR" \
+      --replay-dir "$REPLAY_DIR" \
+      >"$OUT_ROOT/rationale_replay_readout.txt"
+    cat "$OUT_ROOT/rationale_replay_readout.txt"
+  fi
+fi
+
 if [[ "$DRY_RUN" != "1" ]]; then
   readout_args=(
     "$PYTHON" -m aisafety.scripts.read_summeval_structured_cot
@@ -257,4 +322,7 @@ echo "analysis_dir=$ANALYSIS_DIR"
 if [[ "$RUN_ACTIVATIONS" == "1" ]]; then
   echo "activation_dir=$ACTIVATION_DIR"
   echo "activation_analysis_dir=$ACTIVATION_ANALYSIS_DIR"
+fi
+if [[ "$RUN_REPLAY" == "1" ]]; then
+  echo "replay_dir=$REPLAY_DIR"
 fi

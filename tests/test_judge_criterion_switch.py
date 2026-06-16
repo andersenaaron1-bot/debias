@@ -80,6 +80,11 @@ from aisafety.scripts.run_judge_structured_cot_enforced import (
     long_analysis_content,
     stage_contents,
 )
+from aisafety.scripts.run_summeval_rationale_replay import (
+    build_replay_cases,
+    effect_summary as replay_effect_summary,
+    pair_metrics as replay_pair_metrics,
+)
 from aisafety.scripts.run_judge_criterion_switch_patching import _paired
 from aisafety.scripts.run_judge_criterion_confirmation_patching import (
     _select_control,
@@ -454,6 +459,104 @@ class CriterionSwitchSuiteTests(unittest.TestCase):
                 [episode["updated_criterion_id"]],
             )
             self.assertIn(episode["phase2_target_semantic"], {"A", "B", "C"})
+
+    def test_summeval_rationale_replay_cases_and_effects(self) -> None:
+        pairs = build_summeval_pairs(
+            _summeval_rows(),
+            max_pairs_per_transition=4,
+            min_pairs_per_transition=3,
+            min_choice_gap=0.4,
+            tie_threshold=0.15,
+            max_source_chars=200,
+            seed=1234,
+        )
+        flip_pairs = [
+            row for row in pairs if row["transition_type"] == "criterion_flip"
+        ]
+        traces = []
+        for pair in flip_pairs[:2]:
+            for order in ("original", "swapped"):
+                traces.append(
+                    {
+                        "trace_id": f"trace-{pair['pair_id']}-{order}",
+                        "pair_id": pair["pair_id"],
+                        "presentation_order": order,
+                        "condition_id": "free_cot",
+                        "branch_index": 0,
+                        "transition_type": "criterion_flip",
+                        "phase1_response_text": "Option A is better under the donor criterion.",
+                    }
+                )
+        cases = build_replay_cases(
+            pairs=flip_pairs[:2],
+            traces=traces,
+            donor_conditions={"free_cot"},
+            replay_modes=["native"],
+            include_branches={0},
+            max_pairs=0,
+            seed=1234,
+        )
+        self.assertIn("baseline", {row["replay_condition"] for row in cases})
+        self.assertIn("evidence_only", {row["replay_condition"] for row in cases})
+        self.assertIn("same_free_cot", {row["replay_condition"] for row in cases})
+        self.assertIn("opposite_free_cot", {row["replay_condition"] for row in cases})
+
+        scored_rows = []
+        for pair_index, pair in enumerate(flip_pairs[:2]):
+            recipient = pair["criterion_targets"][pair["initial_criterion_id"]]
+            donor = pair["criterion_targets"][pair["updated_criterion_id"]]
+            for order in ("original", "swapped"):
+                scored_rows.extend(
+                    [
+                        {
+                            "replay_id": f"base-{pair_index}-{order}",
+                            "pair_id": pair["pair_id"],
+                            "presentation_order": order,
+                            "replay_mode": "native",
+                            "replay_condition": "baseline",
+                            "recipient_role": "initial",
+                            "donor_condition": "",
+                            "branch_index": 0,
+                            "forced_choice_semantic": recipient,
+                            "recipient_target_selected": True,
+                            "donor_target_selected": np.nan,
+                            "recipient_probability": 0.8,
+                            "donor_probability": np.nan,
+                            "recipient_minus_donor_logit_margin": np.nan,
+                            "recipient_target_semantic": recipient,
+                            "donor_target_semantic": "",
+                        },
+                        {
+                            "replay_id": f"opp-{pair_index}-{order}",
+                            "pair_id": pair["pair_id"],
+                            "presentation_order": order,
+                            "replay_mode": "native",
+                            "replay_condition": "opposite_free_cot",
+                            "recipient_role": "initial",
+                            "donor_condition": "free_cot",
+                            "branch_index": 0,
+                            "forced_choice_semantic": donor,
+                            "recipient_target_selected": False,
+                            "donor_target_selected": True,
+                            "recipient_probability": 0.2,
+                            "donor_probability": 0.8,
+                            "recipient_minus_donor_logit_margin": -2.0,
+                            "recipient_target_semantic": recipient,
+                            "donor_target_semantic": donor,
+                        },
+                    ]
+                )
+        pair_frame = replay_pair_metrics(pd.DataFrame(scored_rows))
+        effects = replay_effect_summary(
+            pair_frame,
+            bootstrap=100,
+            seed=1234,
+        )
+        recipient_effect = effects[
+            effects["contrast"].eq("opposite_free_vs_baseline")
+            & effects["metric"].eq("recipient_target_adoption")
+        ]["mean"].iloc[0]
+        self.assertLess(recipient_effect, 0)
 
     def test_confirmation_prompt_variants_and_cache_sharing(self) -> None:
         pair = _confirmation_candidates()[0]

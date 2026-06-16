@@ -237,6 +237,8 @@ python -m aisafety.scripts.read_judge_structured_cot --help
 python -m aisafety.scripts.build_summeval_criterion_suite --help
 python -m aisafety.scripts.analyze_summeval_structured_cot --help
 python -m aisafety.scripts.read_summeval_structured_cot --help
+python -m aisafety.scripts.run_summeval_rationale_replay --help
+python -m aisafety.scripts.read_summeval_rationale_replay --help
 python -m aisafety.scripts.build_helpsteer2_enforced_structure_suite --help
 python -m aisafety.scripts.run_judge_structured_cot_enforced --help
 python -m aisafety.scripts.analyze_judge_structured_cot_enforced --help
