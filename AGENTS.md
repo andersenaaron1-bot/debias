@@ -219,6 +219,8 @@ python -m aisafety.scripts.analyze_judge_reasoning_mode_contrasts --help
 python -m aisafety.scripts.build_judge_deliberation_source_pack --help
 python -m aisafety.scripts.run_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
+python -m aisafety.scripts.analyze_judge_factual_cot_effect --help
+python -m aisafety.scripts.read_judge_factual_cot_effect --help
 python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
 python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
