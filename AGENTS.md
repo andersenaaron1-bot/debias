@@ -221,6 +221,9 @@ python -m aisafety.scripts.run_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.analyze_judge_reasoning_budget_sweep --help
 python -m aisafety.scripts.analyze_judge_factual_cot_effect --help
 python -m aisafety.scripts.read_judge_factual_cot_effect --help
+python -m aisafety.scripts.analyze_judge_factual_mediator_dissociation --help
+python -m aisafety.scripts.run_judge_factual_mediator_direction_patching --help
+python -m aisafety.scripts.read_judge_factual_mediator_dissociation --help
 python -m aisafety.scripts.build_helpsteer2_matched_criterion_suite --help
 python -m aisafety.scripts.analyze_helpsteer2_matched_criterion --help
 python -m aisafety.scripts.read_helpsteer2_matched_criterion --help
@@ -232,6 +235,9 @@ python -m aisafety.scripts.read_judge_criterion_confirmation --help
 python -m aisafety.scripts.analyze_judge_criterion_confirmation_activations --help
 python -m aisafety.scripts.run_judge_criterion_confirmation_patching --help
 python -m aisafety.scripts.read_judge_criterion_confirmation_mechanistic --help
+python -m aisafety.scripts.analyze_judge_prose_decision_dissociation --help
+python -m aisafety.scripts.run_judge_prose_decision_direction_patching --help
+python -m aisafety.scripts.read_judge_prose_decision_dissociation --help
 python -m aisafety.scripts.build_helpsteer2_structured_cot_suite --help
 python -m aisafety.scripts.analyze_judge_structured_cot --help
 python -m aisafety.scripts.analyze_judge_structured_cot_adherence --help
