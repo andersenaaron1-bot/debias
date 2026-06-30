@@ -112,7 +112,7 @@ if [[ "$RUN_EVALUATIVE" == "1" ]]; then
         --branch-index "$PATCH_BRANCH_INDEX"
         --stage phase2
         --budget-tokens 384
-        --alphas "$PATCH_ALPHAS"
+        --alphas="$PATCH_ALPHAS"
         --max-pairs "$PATCH_MAX_PAIRS"
         --max-score-length "$MAX_SCORE_LENGTH"
         --bootstrap "$BOOTSTRAP"
@@ -233,7 +233,7 @@ if [[ "$RUN_FACTUAL" == "1" ]]; then
         --include-datasets "$FACTUAL_INCLUDE_DATASETS"
         --budget-tokens "$FACTUAL_ENDPOINT_BUDGET"
         --branch-index "$FACTUAL_PATCH_BRANCH_INDEX"
-        --alphas "$FACTUAL_PATCH_ALPHAS"
+        --alphas="$FACTUAL_PATCH_ALPHAS"
         --max-pairs "$FACTUAL_PATCH_MAX_PAIRS"
         --max-score-length "$MAX_SCORE_LENGTH"
         --bootstrap "$BOOTSTRAP"
